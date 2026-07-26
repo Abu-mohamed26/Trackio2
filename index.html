@@ -620,6 +620,16 @@
         <label>نص الرسالة</label>
         <textarea id="annMessage" rows="3" placeholder="مثال: نود إبلاغكم بأن حصة يوم الجمعة القادم ملغية وسيتم تعويضها لاحقًا." style="padding:10px 12px; border-radius:8px; border:1.5px solid var(--paper-line); font-family:'Tajawal',sans-serif; font-size:14px; background:#FDFCFA; color:var(--ink); resize:vertical;"></textarea>
       </div>
+      <div class="field" style="margin-top:10px;">
+        <label>إرفاق صورة أو ملف (اختياري)</label>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('annFile').click()">📎 اختيار صورة/ملف</button>
+          <input type="file" id="annFile" accept="image/*,.pdf,.doc,.docx" style="display:none;" onchange="onAnnFileSelected(event)">
+          <span id="annFileName" style="font-size:12.5px; color:#7b887f;">لا يوجد ملف مختار</span>
+          <button class="btn btn-danger btn-sm" id="annFileRemoveBtn" style="display:none;" onclick="removeAnnFile()">✕ إزالة</button>
+        </div>
+        <div style="font-size:11.5px; color:#8b988f; margin-top:4px;">لو أرفقت ملفًا، هيظهر زرار "مشاركة" واحد بيفتح نافذة مشاركة الجهاز تختار منها واتساب وتحدد المستلمين بنفسك — واتساب لا يسمح بإرفاق ملف تلقائيًا لأرقام متعددة دفعة واحدة عبر رابط مباشر.</div>
+      </div>
       <div style="margin:12px 0; display:flex; gap:10px; flex-wrap:wrap;">
         <button class="btn btn-primary" onclick="prepareAnnouncement()">📋 تجهيز الإرسال</button>
         <button class="btn btn-outline" onclick="copyAnnNumbers()">📋 نسخ كل الأرقام</button>
@@ -1358,9 +1368,12 @@ function totalOf(rec){
   return vals.reduce((a,b)=>a+b,0);
 }
 function levelOf(total){
-  if(total>=60) return {label:'ممتاز', css:'level-ممتاز', color:'#1E7B3C'};
-  if(total>=50) return {label:'جيد جدًا', css:'level-جيدجدا', color:'#2E6F73'};
-  if(total>=40) return {label:'جيد', css:'level-جيد', color:'#C88835'};
+  // Thresholds correspond to the 8-session block scale (out of 560):
+  // ممتاز 476-560، جيد جدًا 420-475.5، جيد 364-419.5، مقبول 280-363.5، دون المستوى أقل من 280
+  // (divided by 8 here since this function always receives a per-session value out of 70)
+  if(total>=59.5) return {label:'ممتاز', css:'level-ممتاز', color:'#1E7B3C'};
+  if(total>=52.5) return {label:'جيد جدًا', css:'level-جيدجدا', color:'#2E6F73'};
+  if(total>=45.5) return {label:'جيد', css:'level-جيد', color:'#C88835'};
   if(total>=35) return {label:'مقبول', css:'level-مقبول', color:'#B4622F'};
   return {label:'دون المستوى', css:'level-دونالمستوى', color:'#B4452F'};
 }
@@ -1967,6 +1980,28 @@ function renderAnnTab(){
   stageSel.value = DATA.currentStage;
   fillAnnGroups();
 }
+let annAttachedFile = null;
+function onAnnFileSelected(event){
+  const file = event.target.files[0];
+  annAttachedFile = file || null;
+  const nameEl = document.getElementById('annFileName');
+  const removeBtn = document.getElementById('annFileRemoveBtn');
+  if(annAttachedFile){
+    nameEl.textContent = `📎 ${annAttachedFile.name}`;
+    removeBtn.style.display = 'inline-block';
+  } else {
+    nameEl.textContent = 'لا يوجد ملف مختار';
+    removeBtn.style.display = 'none';
+  }
+  document.getElementById('annList').innerHTML = '';
+}
+function removeAnnFile(){
+  annAttachedFile = null;
+  document.getElementById('annFile').value = '';
+  document.getElementById('annFileName').textContent = 'لا يوجد ملف مختار';
+  document.getElementById('annFileRemoveBtn').style.display = 'none';
+  document.getElementById('annList').innerHTML = '';
+}
 function fillAnnGroups(){
   const stageId = document.getElementById('annStageSelect').value;
   const sel = document.getElementById('annGroupSelect');
@@ -2001,6 +2036,27 @@ function prepareAnnouncement(){
     listBox.innerHTML = `<div class="empty-state">لا توجد أرقام هواتف مسجلة لهذا الاختيار.</div>`;
     return;
   }
+
+  if(annAttachedFile){
+    const canShareFiles = !!(navigator.canShare && navigator.canShare({ files:[annAttachedFile] }));
+    listBox.innerHTML = `
+      <div style="font-size:12.5px;color:#7b887f;margin:14px 0 10px 0;">
+        الملف المرفق: 📎 ${annAttachedFile.name}<br>
+        ${canShareFiles
+          ? `اضغط "مشاركة" لفتح نافذة المشاركة، اختر واتساب، وحدد المستلمين يدويًا من قائمة جهات الاتصال (${contacts.length} جهة مسجلة في المجموعة).`
+          : 'جهازك/متصفحك لا يدعم مشاركة الملفات مباشرة. حمّل الملف يدويًا وأرفقه من داخل واتساب.'}
+      </div>
+      ${canShareFiles ? `<button class="btn btn-wa" onclick="shareAnnouncementWithFile()">📲 مشاركة الرسالة والملف</button>` : `<button class="btn btn-outline" onclick="downloadAnnFile()">⬇ تحميل الملف</button>`}
+      <div style="margin-top:14px; font-size:12.5px; color:#7b887f;">قائمة أرقام المجموعة (${contacts.length}) للرجوع إليها عند اختيار المستلمين داخل واتساب:</div>
+      ${contacts.map(c=>`
+        <div class="student-card">
+          <div class="student-info"><b>${c.label}</b><div class="meta">${c.phone}</div></div>
+        </div>
+      `).join('')}
+    `;
+    return;
+  }
+
   listBox.innerHTML = `<div style="font-size:12.5px;color:#7b887f;margin:14px 0 10px 0;">تم تجهيز ${contacts.length} رسالة بنفس النص. اضغط "إرسال" بجانب كل اسم.</div>` +
     contacts.map(c=>`
       <div class="student-card">
@@ -2010,6 +2066,30 @@ function prepareAnnouncement(){
         </div>
       </div>
     `).join('');
+}
+async function shareAnnouncementWithFile(){
+  if(!annAttachedFile) return;
+  const message = document.getElementById('annMessage').value.trim();
+  try{
+    await navigator.share({
+      files: [annAttachedFile],
+      title: 'رسالة للمجموعة',
+      text: message
+    });
+  }catch(err){
+    if(err && err.name !== 'AbortError'){
+      alert('تعذرت المشاركة. جرّب تحميل الملف وإرفاقه يدويًا في واتساب.');
+    }
+  }
+}
+function downloadAnnFile(){
+  if(!annAttachedFile) return;
+  const url = URL.createObjectURL(annAttachedFile);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = annAttachedFile.name;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
 }
 function copyAnnNumbers(){
   const groupId = document.getElementById('annGroupSelect').value;
