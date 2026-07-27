@@ -956,6 +956,7 @@ function addStudent(){
   fillFilterGroups();
   renderStudents();
 }
+let expandedEditStudentIds = new Set();
 function renderStudents(){
   const stageFilter = document.getElementById('filterStageStudents').value;
   const groupFilter = document.getElementById('filterGroupStudents').value;
@@ -972,8 +973,9 @@ function renderStudents(){
   box.innerHTML = list.map(s=>{
     const sameStageGroups = groupsByStage(s.stageId);
     const groupOptionsHTML = sameStageGroups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+    const isEditing = expandedEditStudentIds.has(s.id);
     return `
-    <div class="student-card">
+    <div class="student-card" style="${isEditing?'flex-direction:column; align-items:stretch;':''}">
       <div class="student-info">
         <b>${s.name}</b>
         <div class="meta">${stageName(s.stageId)} · ${groupName(s.groupId)} · ولي الأمر: ${s.parentName||'—'} · هاتف الطالب: ${s.phone||'—'} · هاتف ولي الأمر: ${s.parentPhone||'—'}</div>
@@ -983,12 +985,63 @@ function renderStudents(){
           ${groupOptionsHTML}
         </select>
         <button class="btn btn-teal btn-sm" onclick="moveStudent('${s.id}')">نقل</button>
+        <button class="btn btn-outline btn-sm" onclick="toggleEditStudent('${s.id}')">${isEditing?'إغلاق':'تعديل'}</button>
         <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">حذف</button>
       </div>
+      ${isEditing ? `
+        <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--paper-line);">
+          <div class="field-row">
+            <div class="field">
+              <label>اسم الطالب</label>
+              <input type="text" id="editName_${s.id}" value="${s.name||''}">
+            </div>
+            <div class="field">
+              <label>اسم ولي الأمر</label>
+              <input type="text" id="editParentName_${s.id}" value="${s.parentName||''}">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>رقم هاتف الطالب</label>
+              <input type="tel" id="editPhone_${s.id}" value="${s.phone||''}">
+            </div>
+            <div class="field">
+              <label>رقم هاتف ولي الأمر</label>
+              <input type="tel" id="editParentPhone_${s.id}" value="${s.parentPhone||''}">
+            </div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button class="btn btn-primary btn-sm" onclick="saveStudentEdit('${s.id}')">💾 حفظ التعديلات</button>
+            <button class="btn btn-outline btn-sm" onclick="toggleEditStudent('${s.id}')">إلغاء</button>
+          </div>
+        </div>
+      ` : ''}
     </div>
   `;
   }).join('');
   list.forEach(s=>{ const sel = document.getElementById('moveSel_'+s.id); if(sel) sel.value = s.groupId; });
+}
+function toggleEditStudent(studentId){
+  if(expandedEditStudentIds.has(studentId)) expandedEditStudentIds.delete(studentId);
+  else expandedEditStudentIds.add(studentId);
+  renderStudents();
+}
+function saveStudentEdit(studentId){
+  const student = DATA.students.find(s=>s.id===studentId);
+  if(!student) return;
+  const name = document.getElementById('editName_'+studentId).value.trim();
+  const parentName = document.getElementById('editParentName_'+studentId).value.trim();
+  const phone = document.getElementById('editPhone_'+studentId).value.trim();
+  const parentPhone = document.getElementById('editParentPhone_'+studentId).value.trim();
+  if(!name){ alert('اسم الطالب لا يمكن أن يكون فارغًا'); return; }
+  student.name = name;
+  student.parentName = parentName;
+  student.phone = phone;
+  student.parentPhone = parentPhone;
+  saveData(true);
+  expandedEditStudentIds.delete(studentId);
+  showToast('✓ تم حفظ تعديلات الطالب');
+  renderStudents();
 }
 /* Shared move logic: moves a student to another group within the SAME stage,
    keeping all data and grade history intact (unlike end-of-year promotion). */
