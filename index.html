@@ -439,6 +439,21 @@
     </div>
 
     <div class="card">
+      <h2>قائمة الطلاب <span class="tag" id="studentsCountTag">0</span></h2>
+      <div class="field-row" style="margin-bottom:4px;">
+        <div class="field">
+          <label>تصفية حسب الصف</label>
+          <select id="filterStageStudents" onchange="renderStudents()"></select>
+        </div>
+        <div class="field">
+          <label>تصفية حسب المجموعة</label>
+          <select id="filterGroupStudents" onchange="renderStudents()"></select>
+        </div>
+      </div>
+      <div id="studentsList"></div>
+    </div>
+
+    <div class="card">
       <h2>ترحيل جماعي للطلاب <span class="tag">PROMOTE</span></h2>
       <div style="font-size:13px; color:#7b887f; margin-bottom:14px;">لترحيل كل طلاب صف دراسي (أو مجموعة معينة) إلى الصف الأعلى — يتم نقل بياناتهم الأساسية فقط (الاسم، ولي الأمر، الأرقام) بدون سجل درجاتهم السابق، ليبدأوا العام الجديد بسجل نظيف. يُستخدم عادة بعد انتهاء العام الدراسي.</div>
       <div class="field-row">
@@ -469,21 +484,6 @@
       </div>
       <div id="promoteCountInfo" style="font-size:13px; color:#7b887f; margin-bottom:12px;"></div>
       <button class="btn btn-primary" onclick="promoteStudents()">⇪ ترحيل الطلاب</button>
-    </div>
-
-    <div class="card">
-      <h2>قائمة الطلاب <span class="tag" id="studentsCountTag">0</span></h2>
-      <div class="field-row" style="margin-bottom:4px;">
-        <div class="field">
-          <label>تصفية حسب الصف</label>
-          <select id="filterStageStudents" onchange="renderStudents()"></select>
-        </div>
-        <div class="field">
-          <label>تصفية حسب المجموعة</label>
-          <select id="filterGroupStudents" onchange="renderStudents()"></select>
-        </div>
-      </div>
-      <div id="studentsList"></div>
     </div>
   </section>
 
