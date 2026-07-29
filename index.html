@@ -48,11 +48,11 @@
   .mono{ font-family:'IBM Plex Mono', monospace; direction:ltr; unicode-bidi:isolate; }
 
   header.top{
-    background: linear-gradient(180deg, var(--chalk-green) 0%, var(--chalk-green-dark) 100%);
+    background: linear-gradient(180deg, #4B2E83 0%, #331F5C 100%);
     color:#F3EFE3;
     padding:22px 24px 0 24px;
     position:sticky; top:0; z-index:20;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
   }
   .top-row{
     display:flex; align-items:center; justify-content:space-between;
@@ -63,40 +63,45 @@
   .brand .mark{
     width:42px;height:42px;border-radius:9px;
     object-fit:cover;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
   }
   .brand h1{ font-size:20px; margin:0; font-weight:800; letter-spacing:.2px;}
-  .brand small{ display:block; color:#C9D6CC; font-size:12px; margin-top:2px; font-weight:400; font-family:'Tajawal',sans-serif;}
+  .brand small{ display:block; color:#D9CFEF; font-size:12px; margin-top:2px; font-weight:400; font-family:'Tajawal',sans-serif;}
 
   #importFile{ display:none; }
 
-  /* Ledger-tab style navigation */
+  /* Ledger-tab style navigation, with a raised 3D look */
   nav.tabs{
-    display:flex; gap:6px; overflow-x:auto; padding-bottom:0;
+    display:flex; gap:8px; overflow-x:auto; padding-bottom:4px;
   }
   nav.tabs button{
     appearance:none; border:none; cursor:pointer;
     font-family:'Cairo',sans-serif; font-weight:700; font-size:14px;
     color:#DCE6DF;
-    background: rgba(255,255,255,0.06);
+    background: linear-gradient(180deg, rgba(255,255,255,0.2), rgba(255,255,255,0.03));
     padding:12px 20px 14px 20px;
     clip-path: polygon(10% 0, 90% 0, 100% 100%, 0% 100%);
     white-space:nowrap;
-    transition: all .15s ease;
-    position:relative; top:1px;
+    transition: all .12s ease;
+    position:relative; top:0;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.28), 0 5px 8px rgba(0,0,0,0.18);
+    border-top: 1px solid rgba(255,255,255,0.3);
   }
-  nav.tabs button:hover{ background:rgba(255,255,255,0.14); color:#fff; }
+  nav.tabs button:hover{ background:linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.08)); color:#fff; top:-1px; }
   nav.tabs button.active{
     background: var(--paper);
     color: var(--chalk-green-dark);
+    box-shadow: inset 0 3px 6px rgba(0,0,0,0.22), 0 1px 0 rgba(255,255,255,0.4);
+    top:3px;
+    border-top: 1px solid rgba(0,0,0,0.1);
   }
-  nav.tabs button[data-tab="basic"].active{ background:var(--accent-basic); color:#fff; }
-  nav.tabs button[data-tab="stage"].active{ background:var(--accent-stage); color:#2A2013; }
-  nav.tabs button[data-tab="group"].active{ background:var(--accent-group); color:#fff; }
-  nav.tabs button[data-tab="students"].active{ background:var(--accent-students); color:#fff; }
-  nav.tabs button[data-tab="grades"].active{ background:var(--accent-grades); color:#fff; }
-  nav.tabs button[data-tab="best"].active{ background:var(--accent-best); color:#2A2013; }
-  nav.tabs button[data-tab="contact"].active{ background:var(--accent-contact); color:#fff; }
+  nav.tabs button[data-tab="basic"].active{ background:linear-gradient(180deg, #3D8489, var(--accent-basic)); color:#fff; }
+  nav.tabs button[data-tab="stage"].active{ background:linear-gradient(180deg, #F0BC72, var(--accent-stage)); color:#2A2013; }
+  nav.tabs button[data-tab="group"].active{ background:linear-gradient(180deg, #63B382, var(--accent-group)); color:#fff; }
+  nav.tabs button[data-tab="students"].active{ background:linear-gradient(180deg, #9689EA, var(--accent-students)); color:#fff; }
+  nav.tabs button[data-tab="grades"].active{ background:linear-gradient(180deg, #EA8358, var(--accent-grades)); color:#fff; }
+  nav.tabs button[data-tab="best"].active{ background:linear-gradient(180deg, #E5BC3D, var(--accent-best)); color:#2A2013; }
+  nav.tabs button[data-tab="contact"].active{ background:linear-gradient(180deg, #47DD7C, var(--accent-contact)); color:#fff; }
 
   main{
     max-width:1100px; margin:0 auto; padding:26px 20px 60px 20px;
@@ -114,13 +119,13 @@
     box-shadow: var(--shadow);
     margin-bottom:18px;
   }
-  #panel-basic .card{ border-top-color:var(--accent-basic); }
-  #panel-stage .card{ border-top-color:var(--accent-stage); }
-  #panel-group .card{ border-top-color:var(--accent-group); }
-  #panel-students .card{ border-top-color:var(--accent-students); }
-  #panel-grades .card{ border-top-color:var(--accent-grades); }
-  #panel-best .card{ border-top-color:var(--accent-best); }
-  #panel-contact .card{ border-top-color:var(--accent-contact); }
+  #panel-basic .card{ border-top-color:var(--accent-basic); background:linear-gradient(180deg, rgba(46,111,115,0.06), #FFFFFF 140px); }
+  #panel-stage .card{ border-top-color:var(--accent-stage); background:linear-gradient(180deg, rgba(227,168,87,0.09), #FFFFFF 140px); }
+  #panel-group .card{ border-top-color:var(--accent-group); background:linear-gradient(180deg, rgba(76,154,107,0.08), #FFFFFF 140px); }
+  #panel-students .card{ border-top-color:var(--accent-students); background:linear-gradient(180deg, rgba(124,111,224,0.08), #FFFFFF 140px); }
+  #panel-grades .card{ border-top-color:var(--accent-grades); background:linear-gradient(180deg, rgba(225,103,59,0.08), #FFFFFF 140px); }
+  #panel-best .card{ border-top-color:var(--accent-best); background:linear-gradient(180deg, rgba(212,160,23,0.09), #FFFFFF 140px); }
+  #panel-contact .card{ border-top-color:var(--accent-contact); background:linear-gradient(180deg, rgba(37,211,102,0.08), #FFFFFF 140px); }
   .card h2{
     margin:0 0 14px 0; font-size:17px; color:var(--chalk-green-dark);
     display:flex; align-items:center; gap:8px;
@@ -140,12 +145,13 @@
   .field-row{ display:flex; flex-wrap:wrap; gap:14px; margin-bottom:12px; }
   .field{ flex:1; min-width:190px; display:flex; flex-direction:column; gap:5px; }
   .field label{ font-size:13px; color:#5b6b63; font-weight:500; }
-  select, input[type=text], input[type=tel], input[type=number]{
+  select, input[type=text], input[type=tel], input[type=number], textarea{
     padding:10px 12px 10px 34px; border-radius:9px; border:1.5px solid var(--paper-line);
     font-family:'Tajawal',sans-serif; font-size:14px; background:#FDFCFA; color:var(--ink);
     outline:none; transition:border-color .15s ease, box-shadow .15s ease;
     box-shadow: 0 1px 3px rgba(22,43,36,0.05);
   }
+  textarea{ padding:10px 12px; }
   select{
     appearance:none; -webkit-appearance:none; -moz-appearance:none;
     cursor:pointer;
@@ -159,13 +165,21 @@
 
   /* Default (non-focus) colored select styling per tab, so dropdowns read as
      part of that section's palette even before interaction */
-  #panel-basic select{ border-color:rgba(46,111,115,0.4); background-color:rgba(46,111,115,0.05); }
-  #panel-stage select{ border-color:rgba(227,168,87,0.5); background-color:rgba(227,168,87,0.07); }
-  #panel-group select{ border-color:rgba(76,154,107,0.45); background-color:rgba(76,154,107,0.06); }
-  #panel-students select{ border-color:rgba(124,111,224,0.45); background-color:rgba(124,111,224,0.06); }
-  #panel-grades select{ border-color:rgba(225,103,59,0.45); background-color:rgba(225,103,59,0.06); }
-  #panel-best select{ border-color:rgba(212,160,23,0.5); background-color:rgba(212,160,23,0.07); }
-  #panel-contact select{ border-color:rgba(37,211,102,0.45); background-color:rgba(37,211,102,0.06); }
+  #panel-basic select{ border-color:rgba(46,111,115,0.55); background-color:rgba(46,111,115,0.13); background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%232E6F73' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>"); }
+  #panel-stage select{ border-color:rgba(227,168,87,0.65); background-color:rgba(227,168,87,0.18); background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23C88835' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>"); }
+  #panel-group select{ border-color:rgba(76,154,107,0.6); background-color:rgba(76,154,107,0.15); background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234C9A6B' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>"); }
+  #panel-students select{ border-color:rgba(124,111,224,0.6); background-color:rgba(124,111,224,0.14); background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237C6FE0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>"); }
+  #panel-grades select{ border-color:rgba(225,103,59,0.6); background-color:rgba(225,103,59,0.14); background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23E1673B' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>"); }
+  #panel-best select{ border-color:rgba(212,160,23,0.65); background-color:rgba(212,160,23,0.18); background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239C7A0F' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>"); }
+  #panel-contact select{ border-color:rgba(37,211,102,0.6); background-color:rgba(37,211,102,0.14); background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231D9C56' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>"); }
+
+  #panel-basic input, #panel-basic textarea{ background-color:rgba(46,111,115,0.05); border-color:rgba(46,111,115,0.3); }
+  #panel-stage input, #panel-stage textarea{ background-color:rgba(227,168,87,0.08); border-color:rgba(227,168,87,0.4); }
+  #panel-group input, #panel-group textarea{ background-color:rgba(76,154,107,0.07); border-color:rgba(76,154,107,0.35); }
+  #panel-students input, #panel-students textarea{ background-color:rgba(124,111,224,0.06); border-color:rgba(124,111,224,0.35); }
+  #panel-grades input, #panel-grades textarea{ background-color:rgba(225,103,59,0.06); border-color:rgba(225,103,59,0.35); }
+  #panel-best input, #panel-best textarea{ background-color:rgba(212,160,23,0.08); border-color:rgba(212,160,23,0.4); }
+  #panel-contact input, #panel-contact textarea{ background-color:rgba(37,211,102,0.06); border-color:rgba(37,211,102,0.35); }
 
   #panel-basic select:focus, #panel-basic input:focus{ border-color:var(--accent-basic); box-shadow: 0 0 0 3px rgba(46,111,115,0.15); }
   #panel-stage select:focus, #panel-stage input:focus{ border-color:var(--accent-stage); box-shadow: 0 0 0 3px rgba(227,168,87,0.2); }
@@ -618,7 +632,7 @@
       </div>
       <div class="field">
         <label>نص الرسالة</label>
-        <textarea id="annMessage" rows="3" placeholder="مثال: نود إبلاغكم بأن حصة يوم الجمعة القادم ملغية وسيتم تعويضها لاحقًا." style="padding:10px 12px; border-radius:8px; border:1.5px solid var(--paper-line); font-family:'Tajawal',sans-serif; font-size:14px; background:#FDFCFA; color:var(--ink); resize:vertical;"></textarea>
+        <textarea id="annMessage" rows="3" placeholder="مثال: نود إبلاغكم بأن حصة يوم الجمعة القادم ملغية وسيتم تعويضها لاحقًا." style="font-family:'Tajawal',sans-serif; font-size:14px; resize:vertical;"></textarea>
       </div>
       <div class="field" style="margin-top:10px;">
         <label>إرفاق صورة أو ملف (اختياري)</label>
