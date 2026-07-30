@@ -211,6 +211,8 @@
   .btn-outline:hover{ border-color:var(--teal); color:var(--teal); }
   .btn-wa{ background:#25D366; color:#fff; }
   .btn-wa:hover{ opacity:.9; }
+  .btn-import{ background:var(--accent-students); color:#fff; }
+  .btn-import:hover{ opacity:.9; }
   .btn-sm{ padding:6px 12px; font-size:12.5px; border-radius:6px; }
 
   table{ width:100%; border-collapse:collapse; margin-top:6px; }
@@ -359,8 +361,8 @@
       <h2>النسخة الاحتياطية <span class="tag">BACKUP</span></h2>
       <div style="font-size:12.5px; color:#7b887f; margin-bottom:14px;">احفظ نسخة من كل بياناتك (الصفوف، المجموعات، الطلاب، الدرجات) كملف، أو استرجعها لاحقًا على نفس الجهاز أو جهاز آخر.</div>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="btn btn-outline" onclick="exportData()">⬇ نسخة احتياطية</button>
-        <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">⬆ استيراد بيانات</button>
+        <button class="btn btn-teal" onclick="exportData()">⬇ نسخة احتياطية</button>
+        <button class="btn btn-import" onclick="document.getElementById('importFile').click()">⬆ استيراد بيانات</button>
         <input type="file" id="importFile" accept=".json" onchange="importData(event)">
       </div>
     </div>
