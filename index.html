@@ -385,6 +385,15 @@
   <!-- TAB 2: GROUP -->
   <section class="panel" id="panel-group">
     <div class="card">
+      <h2>البحث عن طالب <span class="tag">SEARCH</span></h2>
+      <div class="field">
+        <label>اكتب اسم الطالب</label>
+        <input type="text" id="studentSearchInput" placeholder="ابدأ الكتابة للبحث..." oninput="renderStudentSearch()">
+      </div>
+      <div id="studentSearchResults" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="card">
       <h2>إدارة المجموعات <span class="tag">GROUPS</span></h2>
       <div class="field-row">
         <div class="field">
@@ -824,6 +833,7 @@ function renderGroupTab(){
   fillStageOptions(sel, false);
   sel.value = DATA.currentStage;
   renderGroups();
+  renderStudentSearch();
 }
 let expandedGroupIds = new Set();
 function renderGroups(){
@@ -920,6 +930,160 @@ function deleteGroup(id){
   expandedGroupIds.delete(id);
   saveData();
   renderGroups();
+}
+
+/* ---------------- STUDENT SEARCH (Group tab) ---------------- */
+let searchActionState = {}; // studentId -> 'move' | 'edit' | 'contact' | undefined
+function renderStudentSearch(){
+  const query = (document.getElementById('studentSearchInput').value||'').trim();
+  const box = document.getElementById('studentSearchResults');
+  if(!query){
+    box.innerHTML = '';
+    return;
+  }
+  const matches = DATA.students.filter(s=>s.name && s.name.includes(query));
+  if(matches.length===0){
+    box.innerHTML = `<div class="empty-state">لا يوجد طلاب باسم يحتوي على "${query}".</div>`;
+    return;
+  }
+  box.innerHTML = matches.map(s=>{
+    const action = searchActionState[s.id];
+    return `
+    <div class="student-card" style="${action?'flex-direction:column; align-items:stretch;':''}">
+      <div class="student-info">
+        <b>${s.name}</b>
+        <div class="meta">${stageName(s.stageId)} · ${groupName(s.groupId)} · ولي الأمر: ${s.parentName||'—'} · هاتف الطالب: ${s.phone||'—'} · هاتف ولي الأمر: ${s.parentPhone||'—'}</div>
+      </div>
+      <div class="student-actions">
+        <button class="btn ${action==='move'?'btn-teal':'btn-outline'} btn-sm" onclick="toggleSearchAction('${s.id}','move')">نقل</button>
+        <button class="btn ${action==='edit'?'btn-teal':'btn-outline'} btn-sm" onclick="toggleSearchAction('${s.id}','edit')">تعديل</button>
+        <button class="btn ${action==='contact'?'btn-teal':'btn-outline'} btn-sm" onclick="toggleSearchAction('${s.id}','contact')">تواصل</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteStudentFromSearch('${s.id}')">حذف</button>
+      </div>
+      ${action ? `<div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--paper-line);">${searchActionPanelHTML(s, action)}</div>` : ''}
+    </div>
+  `;
+  }).join('');
+}
+function toggleSearchAction(studentId, action){
+  searchActionState[studentId] = (searchActionState[studentId]===action) ? undefined : action;
+  renderStudentSearch();
+}
+function deleteStudentFromSearch(studentId){
+  deleteStudent(studentId);
+  delete searchActionState[studentId];
+  renderStudentSearch();
+}
+function searchActionPanelHTML(s, action){
+  if(action==='move'){
+    const otherGroups = groupsByStage(s.stageId).filter(g=>g.id!==s.groupId);
+    if(otherGroups.length===0){
+      return `<div style="font-size:12.5px;color:#8b988f;">لا توجد مجموعة أخرى بنفس الصف الدراسي لنقل الطالب إليها.</div>`;
+    }
+    return `
+      <div class="field-row">
+        <div class="field">
+          <label>نقل إلى مجموعة</label>
+          <select id="srchMoveSel_${s.id}">
+            ${otherGroups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="confirmSearchMove('${s.id}')">✓ تأكيد النقل</button>
+    `;
+  }
+  if(action==='edit'){
+    return `
+      <div class="field-row">
+        <div class="field">
+          <label>اسم الطالب</label>
+          <input type="text" id="srchEditName_${s.id}" value="${s.name||''}">
+        </div>
+        <div class="field">
+          <label>اسم ولي الأمر</label>
+          <input type="text" id="srchEditParentName_${s.id}" value="${s.parentName||''}">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>رقم هاتف الطالب</label>
+          <input type="tel" id="srchEditPhone_${s.id}" value="${s.phone||''}">
+        </div>
+        <div class="field">
+          <label>رقم هاتف ولي الأمر</label>
+          <input type="tel" id="srchEditParentPhone_${s.id}" value="${s.parentPhone||''}">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="confirmSearchEdit('${s.id}')">💾 حفظ التعديلات</button>
+    `;
+  }
+  if(action==='contact'){
+    return `
+      <div class="field-row">
+        <div class="field">
+          <label>المستلم</label>
+          <select id="srchContactRecipient_${s.id}" onchange="renderSearchContactTargets('${s.id}')">
+            <option value="parent">ولي الأمر</option>
+            <option value="student">الطالب</option>
+            <option value="both">الاثنين معًا</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>نص الرسالة</label>
+        <textarea id="srchContactMsg_${s.id}" rows="2" placeholder="اكتب رسالتك هنا..." oninput="renderSearchContactTargets('${s.id}')"></textarea>
+      </div>
+      <div id="srchContactTargets_${s.id}" style="margin-top:10px;"></div>
+    `;
+  }
+  return '';
+}
+function confirmSearchMove(studentId){
+  const sel = document.getElementById('srchMoveSel_'+studentId);
+  if(!sel) return;
+  if(performMoveStudent(studentId, sel.value)){
+    searchActionState[studentId] = undefined;
+    renderStudentSearch();
+  }
+}
+function confirmSearchEdit(studentId){
+  const student = DATA.students.find(s=>s.id===studentId);
+  if(!student) return;
+  const name = document.getElementById('srchEditName_'+studentId).value.trim();
+  const parentName = document.getElementById('srchEditParentName_'+studentId).value.trim();
+  const phone = document.getElementById('srchEditPhone_'+studentId).value.trim();
+  const parentPhone = document.getElementById('srchEditParentPhone_'+studentId).value.trim();
+  if(!name){ alert('اسم الطالب لا يمكن أن يكون فارغًا'); return; }
+  student.name = name;
+  student.parentName = parentName;
+  student.phone = phone;
+  student.parentPhone = parentPhone;
+  saveData(true);
+  showToast('✓ تم حفظ تعديلات الطالب');
+  searchActionState[studentId] = undefined;
+  renderStudentSearch();
+}
+function renderSearchContactTargets(studentId){
+  const student = DATA.students.find(s=>s.id===studentId);
+  const box = document.getElementById('srchContactTargets_'+studentId);
+  if(!student || !box) return;
+  const recipient = document.getElementById('srchContactRecipient_'+studentId).value;
+  const message = document.getElementById('srchContactMsg_'+studentId).value.trim();
+  if(!message){ box.innerHTML = ''; return; }
+  const targets = [];
+  if((recipient==='parent' || recipient==='both') && student.parentPhone){
+    targets.push({ label:'ولي الأمر', phone: student.parentPhone });
+  }
+  if((recipient==='student' || recipient==='both') && student.phone){
+    targets.push({ label:'الطالب', phone: student.phone });
+  }
+  if(targets.length===0){
+    box.innerHTML = `<div style="font-size:12px;color:#8b988f;">لا يوجد رقم هاتف مسجل لهذا الاختيار.</div>`;
+    return;
+  }
+  box.innerHTML = targets.map(t=>`
+    <a class="btn btn-wa btn-sm" style="margin-left:8px; margin-bottom:6px; display:inline-block;" href="https://wa.me/${normalizePhone(t.phone)}?text=${encodeURIComponent(message)}" target="_blank" rel="noopener">📲 إرسال إلى ${t.label}</a>
+  `).join('');
 }
 
 /* ---------------- TAB 3: STUDENTS ---------------- */
