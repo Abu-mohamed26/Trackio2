@@ -781,6 +781,17 @@ function generateStudentCode(existingStudents){
   } while(existingStudents.some(s=>s.code===code));
   return code;
 }
+function ensureStudentCodes(data){
+  if(!data || !Array.isArray(data.students)) return false;
+  let changed = false;
+  data.students.forEach(s=>{
+    if(!s.code || typeof s.code !== 'string'){
+      s.code = generateStudentCode(data.students);
+      changed = true;
+    }
+  });
+  return changed;
+}
 function loadData(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
@@ -790,9 +801,7 @@ function loadData(){
       if(typeof parsed.teacherName !== 'string') parsed.teacherName = '';
       if(typeof parsed.subject !== 'string') parsed.subject = '';
       if(!Array.isArray(parsed.students)) parsed.students = [];
-      parsed.students.forEach(s=>{
-        if(!s.code) s.code = generateStudentCode(parsed.students);
-      });
+      ensureStudentCodes(parsed);
       return parsed;
     }
   }catch(e){}
@@ -1184,6 +1193,7 @@ function renderSearchContactTargets(studentId){
 
 /* ---------------- TAB 3: STUDENTS ---------------- */
 function renderStudentsTab(){
+  if(ensureStudentCodes(DATA)) saveData(true);
   renderPromotePanel();
 
   const stuStage = document.getElementById('stuStageSelect');
@@ -2459,9 +2469,16 @@ function importData(e){
       if(!confirm('سيتم استبدال البيانات الحالية بالكامل بالنسخة المستوردة. متابعة؟')) return;
       DATA = parsed;
       if(!DATA.currentStage) DATA.currentStage = STAGES[0].id;
+      if(!DATA.academicYear) DATA.academicYear = defaultAcademicYear();
+      if(typeof DATA.teacherName !== 'string') DATA.teacherName = '';
+      if(typeof DATA.subject !== 'string') DATA.subject = '';
+      if(!Array.isArray(DATA.students)) DATA.students = [];
+      const codesAdded = ensureStudentCodes(DATA);
       saveData();
       refreshPanel(document.querySelector('nav.tabs button.active').dataset.tab);
-      alert('تم استيراد البيانات بنجاح ✅');
+      alert(codesAdded
+        ? 'تم استيراد البيانات بنجاح ✅ (تم توليد أكواد جديدة للطلاب اللي مكانش عندهم كود)'
+        : 'تم استيراد البيانات بنجاح ✅');
     }catch(err){
       alert('تعذر قراءة الملف. تأكد أنه ملف نسخة احتياطية صحيح.');
     }
@@ -2486,6 +2503,7 @@ function renderPvLinkTab(){
   const portalLink = location.origin + location.pathname + '#portal';
   document.getElementById('portalLinkBox').textContent = portalLink;
   document.getElementById('publishAllStatus').textContent = '';
+  if(ensureStudentCodes(DATA)) saveData(true);
   updateFbStatusNote();
 }
 function updateFbStatusNote(){
@@ -2536,9 +2554,9 @@ function buildStudentPayload(studentId){
 async function publishStudentPortal(studentId){
   const ok = await window.fbReady;
   if(!ok) return false;
+  if(ensureStudentCodes(DATA)) saveData(true);
   const student = DATA.students.find(s=>s.id===studentId);
-  if(!student) return false;
-  if(!student.code){ student.code = generateStudentCode(DATA.students); saveData(true); }
+  if(!student || !student.code) return false;
   const payload = buildStudentPayload(studentId);
   const db = firebase.firestore();
   await db.collection('students').doc(student.code).set(payload);
@@ -2553,23 +2571,31 @@ async function publishAllStudents(){
   const ok = await window.fbReady;
   if(!ok){
     statusEl.textContent = '⚠️ تعذر الاتصال بقاعدة البيانات. تأكد من الإنترنت.';
+    statusEl.style.color = 'var(--red)';
     btn.disabled = false;
     return;
   }
-  let count = 0;
-  try{
-    for(const s of DATA.students){
-      if(!s.code) s.code = generateStudentCode(DATA.students);
+  // Repair any students missing a code before publishing (e.g. after importing an old backup)
+  if(ensureStudentCodes(DATA)) saveData(true);
+
+  let successCount = 0;
+  const failed = [];
+  for(const s of DATA.students){
+    try{
+      if(!s.code) throw new Error('no code');
       const payload = buildStudentPayload(s.id);
       await firebase.firestore().collection('students').doc(s.code).set(payload);
-      count++;
+      successCount++;
+    }catch(err){
+      failed.push(s.name);
     }
-    saveData(true);
-    statusEl.textContent = `✓ تم نشر تحديثات ${count} طالب بنجاح`;
+  }
+  if(failed.length===0){
+    statusEl.textContent = `✓ تم نشر تحديثات ${successCount} طالب بنجاح`;
     statusEl.style.color = '#1E7B3C';
-  }catch(err){
-    statusEl.textContent = '⚠️ حدث خطأ أثناء النشر. تأكد من الإنترنت وحاول مرة أخرى.';
-    statusEl.style.color = 'var(--red)';
+  } else {
+    statusEl.innerHTML = `✓ تم نشر ${successCount} طالب — ⚠️ فشل نشر: ${failed.join('، ')}`;
+    statusEl.style.color = '#C88835';
   }
   btn.disabled = false;
 }
