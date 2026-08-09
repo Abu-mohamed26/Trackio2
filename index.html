@@ -276,6 +276,36 @@
   .level-مقبول{ background:#FBEAE0; color:#B4622F; }
   .level-دونالمستوى{ background:#FBEAE6; color:var(--red); }
 
+  /* ---- Parent read-only view ---- */
+  #parentView{ display:none; max-width:760px; margin:0 auto; padding:20px 16px 60px 16px; }
+  .pv-header{
+    background: linear-gradient(180deg, #4B2E83 0%, #331F5C 100%);
+    color:#F3EFE3; padding:22px 20px; border-radius:0 0 18px 18px; margin:0 -16px 20px -16px;
+    text-align:center;
+  }
+  .pv-header img{ width:46px; height:46px; border-radius:10px; margin-bottom:8px; }
+  .pv-header h1{ font-size:19px; margin:0 0 4px 0; }
+  .pv-header .pv-sub{ font-size:12.5px; color:#D9CFEF; }
+  .pv-student-card{
+    background:#fff; border:1px solid var(--paper-line); border-radius:12px; padding:18px;
+    margin-bottom:18px; box-shadow:var(--shadow); text-align:center;
+  }
+  .pv-student-card h2{ margin:0 0 6px 0; font-size:22px; color:var(--chalk-green-dark); }
+  .pv-student-card .pv-meta{ font-size:13px; color:#7b887f; }
+  .pv-block{
+    background:#fff; border:1px solid var(--paper-line); border-radius:12px; padding:16px;
+    margin-bottom:16px; box-shadow:var(--shadow);
+  }
+  .pv-block h3{ margin:0 0 10px 0; font-size:15px; color:var(--chalk-green-dark); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; }
+  .pv-session-row{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:10px 0; border-bottom:1px solid var(--paper-line); flex-wrap:wrap;
+  }
+  .pv-session-row:last-child{ border-bottom:none; }
+  .pv-session-num{ font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--teal); min-width:60px; }
+  .pv-session-details{ font-size:12px; color:#7b887f; flex:1; min-width:180px; }
+  .pv-empty{ text-align:center; padding:40px 20px; color:#8b988f; }
+
   .chart-box{ border:1px solid var(--paper-line); border-radius:10px; padding:16px; background:#FDFCFA; margin-top:16px; }
   .weak-box{ border:1px solid var(--paper-line); border-radius:10px; padding:16px; background:var(--paper); margin-top:14px; }
   .weak-box h3{ margin:0 0 10px 0; font-size:15px; color:var(--chalk-green-dark); }
@@ -552,6 +582,26 @@
   <!-- TAB 5: CONTACT -->
   <section class="panel" id="panel-contact">
     <div class="card">
+      <h2>بوابة متابعة أولياء الأمور <span class="tag">PARENT PORTAL</span></h2>
+      <div style="font-size:12.5px; color:#7b887f; margin-bottom:6px;">رابط واحد بس تبعته لكل أولياء الأمور مرة واحدة. كل ولي أمر بيدخل عليه ويكتب اسم ابنه وكوده الخاص عشان يشوف درجاته بس — من غير ما يشوف أي طالب تاني.</div>
+      <div style="font-size:11.5px; color:#8b988f; margin-bottom:14px;">⚠️ ملحوظة: البيانات بتتحدث في البوابة بس لما تدوس "نشر التحديثات" (تحت) — مش أوتوماتيك على طول لحظة ما تكتب درجة. اضغطها بعد ما تخلص رصد درجات أي حصة أو أي مجموعة.</div>
+
+      <div class="pv-student-card" style="text-align:right; padding:14px 16px;">
+        <div style="font-size:12.5px; color:#7b887f; margin-bottom:6px;">رابط البوابة (ثابت لكل الطلاب — أرسله مرة واحدة في جروب أولياء الأمور)</div>
+        <div class="msg-preview" id="portalLinkBox" style="word-break:break-all; font-size:12.5px; margin-bottom:10px;"></div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="copyPortalLink()">📋 نسخ رابط البوابة</button>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
+        <button class="btn btn-primary" id="publishAllBtn" onclick="publishAllStudents()">📡 نشر التحديثات لكل الطلاب</button>
+        <span id="publishAllStatus" style="font-size:12.5px; color:#7b887f;"></span>
+      </div>
+      <div id="pvFbStatus" style="font-size:11.5px; margin-bottom:6px;"></div>
+    </div>
+
+    <div class="card">
       <h2>إرسال النتائج لولي الأمر <span class="tag">WHATSAPP</span></h2>
       <div class="field-row">
         <div class="field">
@@ -665,8 +715,42 @@
 
 </main>
 
+<div id="parentView">
+  <div class="pv-header">
+    <h1 id="pvAppTitle">Trackio</h1>
+    <div class="pv-sub">تقرير متابعة الطالب — للعرض فقط</div>
+  </div>
+  <div id="pvContent"></div>
+</div>
+
 <footer>Trackio — تُحفظ البيانات محليًا وتلقائيًا على هذا الجهاز فقط.</footer>
 <div class="toast" id="toast"></div>
+
+<!-- Firebase (compat SDK) — used only for the parent portal lookup.
+     All day-to-day app data stays in localStorage on this device, unchanged.
+     No login/authentication is used; Firestore rules restrict access by student code instead. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDc6CURp_qtt4zjSC3fml0ezKPwLix-pVA",
+    authDomain: "trackio-app-2c0f4.firebaseapp.com",
+    projectId: "trackio-app-2c0f4",
+    storageBucket: "trackio-app-2c0f4.firebasestorage.app",
+    messagingSenderId: "850262460217",
+    appId: "1:850262460217:web:545f596e96dd2455d0cae8"
+  };
+  let fbReadyResolve;
+  window.fbReady = new Promise(res => { fbReadyResolve = res; });
+  window.fbError = null;
+  try{
+    firebase.initializeApp(firebaseConfig);
+    fbReadyResolve(true);
+  }catch(err){
+    window.fbError = err;
+    fbReadyResolve(false);
+  }
+</script>
 
 <script>
 /* ---------------- DATA LAYER ---------------- */
@@ -689,6 +773,14 @@ function defaultAcademicYear(){
   const m = now.getMonth()+1;
   return (m>=9) ? `${y}/${y+1}` : `${y-1}/${y}`;
 }
+function generateStudentCode(existingStudents){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // avoids look-alike chars (0/O, 1/I)
+  let code;
+  do{
+    code = Array.from({length:6}, ()=>chars[Math.floor(Math.random()*chars.length)]).join('');
+  } while(existingStudents.some(s=>s.code===code));
+  return code;
+}
 function loadData(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
@@ -697,6 +789,10 @@ function loadData(){
       if(!parsed.academicYear) parsed.academicYear = defaultAcademicYear();
       if(typeof parsed.teacherName !== 'string') parsed.teacherName = '';
       if(typeof parsed.subject !== 'string') parsed.subject = '';
+      if(!Array.isArray(parsed.students)) parsed.students = [];
+      parsed.students.forEach(s=>{
+        if(!s.code) s.code = generateStudentCode(parsed.students);
+      });
       return parsed;
     }
   }catch(e){}
@@ -876,7 +972,7 @@ function groupStudentsPanelHTML(g){
   return `<div style="margin:0 0 14px 10px; padding-right:14px; border-right:2px solid var(--paper-line);">
     ${students.map(s=>`
       <div class="student-card" style="background:#fff;">
-        <div class="student-info"><b>${s.name}</b><div class="meta">ولي الأمر: ${s.parentName||'—'} · هاتف ولي الأمر: ${s.parentPhone||'—'}</div></div>
+        <div class="student-info"><b>${s.name}</b> <span class="mono" style="background:rgba(76,154,107,0.15); color:var(--accent-group); padding:1px 7px; border-radius:5px; font-size:11px;">${s.code||'—'}</span><div class="meta">ولي الأمر: ${s.parentName||'—'} · هاتف ولي الأمر: ${s.parentPhone||'—'}</div></div>
         <div class="student-actions">
           ${otherGroups.length>0 ? `
             <select id="gmoveSel_${s.id}" class="mini-select">
@@ -951,7 +1047,7 @@ function renderStudentSearch(){
     return `
     <div class="student-card" style="${action?'flex-direction:column; align-items:stretch;':''}">
       <div class="student-info">
-        <b>${s.name}</b>
+        <b>${s.name}</b> <span class="mono" style="background:rgba(76,154,107,0.15); color:var(--accent-group); padding:1px 7px; border-radius:5px; font-size:11px;">${s.code||'—'}</span>
         <div class="meta">${stageName(s.stageId)} · ${groupName(s.groupId)} · ولي الأمر: ${s.parentName||'—'} · هاتف الطالب: ${s.phone||'—'} · هاتف ولي الأمر: ${s.parentPhone||'—'}</div>
       </div>
       <div class="student-actions">
@@ -1129,7 +1225,7 @@ function addStudent(){
   if(!name){ alert('من فضلك اكتب اسم الطالب'); return; }
   DATA.students.push({
     id: uid('s'), stageId, groupId, name, parentName,
-    phone, parentPhone
+    phone, parentPhone, code: generateStudentCode(DATA.students)
   });
   ['stuName','stuParentName','stuPhone','stuParentPhone'].forEach(id=>document.getElementById(id).value='');
   saveData();
@@ -1157,7 +1253,7 @@ function renderStudents(){
     return `
     <div class="student-card" style="${isEditing?'flex-direction:column; align-items:stretch;':''}">
       <div class="student-info">
-        <b>${s.name}</b>
+        <b>${s.name}</b> <span class="mono" style="background:rgba(124,111,224,0.15); color:var(--accent-students); padding:1px 7px; border-radius:5px; font-size:11px;">${s.code||'—'}</span>
         <div class="meta">${stageName(s.stageId)} · ${groupName(s.groupId)} · ولي الأمر: ${s.parentName||'—'} · هاتف الطالب: ${s.phone||'—'} · هاتف ولي الأمر: ${s.parentPhone||'—'}</div>
       </div>
       <div class="student-actions">
@@ -1166,6 +1262,7 @@ function renderStudents(){
         </select>
         <button class="btn btn-teal btn-sm" onclick="moveStudent('${s.id}')">نقل</button>
         <button class="btn btn-outline btn-sm" onclick="toggleEditStudent('${s.id}')">${isEditing?'إغلاق':'تعديل'}</button>
+        ${s.parentPhone ? `<a class="btn btn-wa btn-sm" href="https://wa.me/${normalizePhone(s.parentPhone)}?text=${encodeURIComponent(portalCodeMessage(s))}" target="_blank" rel="noopener">📨 إرسال الكود</a>` : ''}
         <button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.id}')">حذف</button>
       </div>
       ${isEditing ? `
@@ -1560,6 +1657,7 @@ function renderContactTab(){
   fillGroupsForContact();
   renderBulkContactTab();
   renderAnnTab();
+  renderPvLinkTab();
 }
 function fillGroupsForContact(){
   const stageId = document.getElementById('contactStageSelect').value;
@@ -2372,8 +2470,266 @@ function importData(e){
   e.target.value = '';
 }
 
+/* ---------------- PARENT READ-ONLY VIEW ---------------- */
+function b64UrlEncodeUnicode(str){
+  const b64 = btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
+    (match, p1) => String.fromCharCode('0x' + p1)));
+  return b64.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function b64UrlDecodeUnicode(str){
+  let b64 = str.replace(/-/g,'+').replace(/_/g,'/');
+  while(b64.length % 4) b64 += '=';
+  return decodeURIComponent(Array.prototype.map.call(atob(b64), c =>
+    '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+}
+function renderPvLinkTab(){
+  const portalLink = location.origin + location.pathname + '#portal';
+  document.getElementById('portalLinkBox').textContent = portalLink;
+  document.getElementById('publishAllStatus').textContent = '';
+  updateFbStatusNote();
+}
+function updateFbStatusNote(){
+  const statusEl = document.getElementById('pvFbStatus');
+  if(!statusEl) return;
+  window.fbReady.then(ok=>{
+    if(!ok){
+      statusEl.textContent = '⚠️ تعذر الاتصال بقاعدة البيانات (تأكد من الإنترنت) — النشر مش هيشتغل دلوقتي.';
+      statusEl.style.color = 'var(--red)';
+    } else {
+      statusEl.textContent = '✓ متصل بقاعدة البيانات';
+      statusEl.style.color = '#1E7B3C';
+    }
+  });
+}
+function copyPortalLink(){
+  const link = document.getElementById('portalLinkBox').textContent;
+  if(!link) return;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(link).then(()=>{
+      showToast('✓ تم نسخ رابط البوابة');
+    }).catch(()=>{ alert(link); });
+  } else {
+    alert(link);
+  }
+}
+function portalCodeMessage(student){
+  const portalLink = location.origin + location.pathname + '#portal';
+  return `مرحبًا، يمكنكم متابعة درجات ${student.name} أولًا بأول من خلال بوابة أولياء الأمور:\n${portalLink}\n\nاسم الطالب: ${student.name}\nالكود الخاص: ${student.code}\n\n(احتفظوا بالكود، هتحتاجوه في كل مرة تدخلوا فيها)`;
+}
+function buildStudentPayload(studentId){
+  const student = DATA.students.find(s=>s.id===studentId);
+  if(!student) return null;
+  const records = DATA.grades.filter(g=>g.studentId===studentId).sort((a,b)=>a.session-b.session);
+  return {
+    n: student.name,
+    st: stageName(student.stageId),
+    sub: DATA.subject || '',
+    t: DATA.teacherName || '',
+    y: DATA.academicYear || '',
+    // compact record encoding: [session, presentFlag, tasmee, wagib, exam, discipline, performance]
+    r: records.map(r => [r.session, r.attendance==='غائب'?0:1,
+      r.tasmee ?? null, r.wagib ?? null, r.exam ?? null, r.discipline ?? null, r.performance ?? null])
+  };
+}
+
+/* ---- Publish to Firestore (students/{code}) — no auth needed, code is the access key ---- */
+async function publishStudentPortal(studentId){
+  const ok = await window.fbReady;
+  if(!ok) return false;
+  const student = DATA.students.find(s=>s.id===studentId);
+  if(!student) return false;
+  if(!student.code){ student.code = generateStudentCode(DATA.students); saveData(true); }
+  const payload = buildStudentPayload(studentId);
+  const db = firebase.firestore();
+  await db.collection('students').doc(student.code).set(payload);
+  return true;
+}
+async function publishAllStudents(){
+  const btn = document.getElementById('publishAllBtn');
+  const statusEl = document.getElementById('publishAllStatus');
+  if(DATA.students.length===0){ statusEl.textContent = 'لا يوجد طلاب لنشرهم.'; return; }
+  btn.disabled = true;
+  statusEl.textContent = '⏳ جاري النشر...';
+  const ok = await window.fbReady;
+  if(!ok){
+    statusEl.textContent = '⚠️ تعذر الاتصال بقاعدة البيانات. تأكد من الإنترنت.';
+    btn.disabled = false;
+    return;
+  }
+  let count = 0;
+  try{
+    for(const s of DATA.students){
+      if(!s.code) s.code = generateStudentCode(DATA.students);
+      const payload = buildStudentPayload(s.id);
+      await firebase.firestore().collection('students').doc(s.code).set(payload);
+      count++;
+    }
+    saveData(true);
+    statusEl.textContent = `✓ تم نشر تحديثات ${count} طالب بنجاح`;
+    statusEl.style.color = '#1E7B3C';
+  }catch(err){
+    statusEl.textContent = '⚠️ حدث خطأ أثناء النشر. تأكد من الإنترنت وحاول مرة أخرى.';
+    statusEl.style.color = 'var(--red)';
+  }
+  btn.disabled = false;
+}
+
+/* ---- Snapshot (offline, self-contained) parent link — kept as a fallback option ---- */
+function generateParentLink(studentId){
+  const payload = buildStudentPayload(studentId);
+  if(!payload) return null;
+  const encoded = b64UrlEncodeUnicode(JSON.stringify(payload));
+  const baseUrl = location.origin + location.pathname;
+  return `${baseUrl}#parent=${encoded}`;
+}
+
+/* ---- Parent-facing views ---- */
+function tryRenderParentView(){
+  if(location.hash === '#portal'){
+    renderPortalView();
+    return true;
+  }
+  if(location.hash.startsWith('#parent=')){
+    try{
+      const encoded = location.hash.slice('#parent='.length);
+      const payload = JSON.parse(b64UrlDecodeUnicode(encoded));
+      showParentViewShell();
+      renderParentReport(payload, 'pvContent');
+    }catch(e){
+      showParentViewShell();
+      document.getElementById('pvContent').innerHTML = `<div class="pv-empty">تعذّر قراءة الرابط. من فضلك اطلب من المعلم/ة إرسال رابط جديد.</div>`;
+    }
+    return true;
+  }
+  return false;
+}
+function showParentViewShell(){
+  document.querySelector('header.top').style.display = 'none';
+  document.querySelector('main').style.display = 'none';
+  document.querySelector('footer').style.display = 'none';
+  document.getElementById('parentView').style.display = 'block';
+}
+function renderPortalView(){
+  showParentViewShell();
+  document.getElementById('pvContent').innerHTML = `
+    <div class="pv-student-card">
+      <h2 style="font-size:18px;">دخول ولي الأمر</h2>
+      <div class="pv-meta">اكتب اسم الطالب/ة بالكامل والكود اللي استلمته من المعلم/ة</div>
+    </div>
+    <div class="pv-block">
+      <div class="field">
+        <label>اسم الطالب/ة</label>
+        <input type="text" id="portalNameInput" placeholder="الاسم بالكامل">
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>الكود</label>
+        <input type="text" id="portalCodeInput" placeholder="مثال: 7XJ9K2" style="direction:ltr; text-transform:uppercase;">
+      </div>
+      <button class="btn btn-primary" style="margin-top:14px;" onclick="portalLookup()">🔍 عرض الدرجات</button>
+    </div>
+    <div id="portalResult"></div>
+  `;
+}
+async function portalLookup(){
+  const name = document.getElementById('portalNameInput').value.trim();
+  const code = document.getElementById('portalCodeInput').value.trim().toUpperCase();
+  const resultBox = document.getElementById('portalResult');
+  if(!name || !code){
+    resultBox.innerHTML = `<div class="pv-empty">من فضلك اكتب الاسم والكود.</div>`;
+    return;
+  }
+  resultBox.innerHTML = `<div class="pv-empty">⏳ جاري البحث...</div>`;
+  const ok = await window.fbReady;
+  if(!ok){
+    resultBox.innerHTML = `<div class="pv-empty">تعذر الاتصال بقاعدة البيانات. تأكد من الإنترنت وحاول مرة أخرى.</div>`;
+    return;
+  }
+  try{
+    const doc = await firebase.firestore().collection('students').doc(code).get();
+    if(!doc.exists){
+      resultBox.innerHTML = `<div class="pv-empty">الكود غير صحيح. تأكد منه مع المعلم/ة.</div>`;
+      return;
+    }
+    const data = doc.data();
+    const normalize = s => (s||'').replace(/\s+/g,'').trim();
+    if(normalize(data.n) !== normalize(name)){
+      resultBox.innerHTML = `<div class="pv-empty">الاسم أو الكود غير صحيح.</div>`;
+      return;
+    }
+    resultBox.innerHTML = '';
+    renderParentReport(data, 'portalResult');
+  }catch(e){
+    resultBox.innerHTML = `<div class="pv-empty">حدث خطأ أثناء البحث. حاول مرة أخرى.</div>`;
+  }
+}
+function pvTotalOf(rec){
+  const vals = [rec[2], rec[3], rec[4], rec[5], rec[6]].map(v=>Number(v)||0);
+  return vals.reduce((a,b)=>a+b,0);
+}
+function renderParentReport(payload, containerId){
+  containerId = containerId || 'pvContent';
+  const records = payload.r || [];
+  let html = `
+    <div class="pv-student-card">
+      <h2>${payload.n||'—'}</h2>
+      <div class="pv-meta">
+        ${payload.st?`الصف: ${payload.st}`:''} ${payload.sub?` · المادة: ${payload.sub}`:''}<br>
+        ${payload.t?`المعلم/ة: ${payload.t}`:''} ${payload.y?` · العام الدراسي: ${payload.y}`:''}
+      </div>
+    </div>
+  `;
+  if(records.length===0){
+    html += `<div class="pv-empty">لا توجد درجات مسجلة حتى الآن.</div>`;
+    document.getElementById(containerId).innerHTML = html;
+    return;
+  }
+  // group into 8-session blocks
+  const blocks = {};
+  records.forEach(rec=>{
+    const session = rec[0];
+    const blockIndex = Math.ceil(session/8);
+    if(!blocks[blockIndex]) blocks[blockIndex] = [];
+    blocks[blockIndex].push(rec);
+  });
+  const blockIndices = Object.keys(blocks).map(Number).sort((a,b)=>b-a); // most recent first
+
+  blockIndices.forEach(bi=>{
+    const blockRecords = blocks[bi].sort((a,b)=>a[0]-b[0]);
+    const start = (bi-1)*8+1, end = bi*8;
+    const blockTotal = blockRecords.reduce((a,r)=>a+pvTotalOf(r),0);
+    const blockAvg = blockTotal/blockRecords.length;
+    const blockLevel = levelOf(blockAvg);
+    html += `<div class="pv-block">
+      <h3>
+        <span>الشهر ${bi} (حصص ${start}-${end})</span>
+        <span class="level-badge ${blockLevel.css}">${blockLevel.label}</span>
+      </h3>`;
+    blockRecords.forEach(rec=>{
+      const [session, present, tasmee, wagib, exam, discipline, performance] = rec;
+      const total = pvTotalOf(rec);
+      const level = levelOf(total);
+      html += `<div class="pv-session-row">
+        <div class="pv-session-num">حصة ${session}</div>
+        <div class="pv-session-details">
+          <span class="pill ${present?'pill-present':'pill-absent'}">${present?'حاضر':'غائب'}</span>
+          تسميع: ${tasmee ?? '—'}/20 · واجب: ${wagib ?? '—'}/20 · امتحان: ${exam ?? '—'}/10 · انضباط: ${discipline ?? '—'}/10 · أداء: ${performance ?? '—'}/10
+        </div>
+        <div style="text-align:left;">
+          <div class="mono" style="font-weight:700; color:var(--chalk-green-dark);">${total}/70</div>
+          <span class="level-badge ${level.css}" style="font-size:11px; padding:2px 8px;">${level.label}</span>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+
+  document.getElementById(containerId).innerHTML = html;
+}
+
 /* ---------------- INIT ---------------- */
-renderBasicsTab();
+if(!tryRenderParentView()){
+  renderBasicsTab();
+}
 
 /* ---------------- PWA: service worker registration ---------------- */
 if('serviceWorker' in navigator){
