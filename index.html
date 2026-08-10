@@ -2567,7 +2567,8 @@ async function publishAllStudents(){
   const statusEl = document.getElementById('publishAllStatus');
   if(DATA.students.length===0){ statusEl.textContent = 'لا يوجد طلاب لنشرهم.'; return; }
   btn.disabled = true;
-  statusEl.textContent = '⏳ جاري النشر...';
+  statusEl.textContent = '⏳ جاري الفحص...';
+  statusEl.style.color = '#7b887f';
   const ok = await window.fbReady;
   if(!ok){
     statusEl.textContent = '⚠️ تعذر الاتصال بقاعدة البيانات. تأكد من الإنترنت.';
@@ -2575,19 +2576,34 @@ async function publishAllStudents(){
     btn.disabled = false;
     return;
   }
+  // Test write first — if this fails, every student will fail for the same reason,
+  // so show one clear diagnostic instead of a long list of names.
+  try{
+    await firebase.firestore().collection('students').doc('__diag__').set({ ts: Date.now() });
+  }catch(err){
+    statusEl.innerHTML = `⚠️ فشل الاتصال بقاعدة البيانات — السبب: <span class="mono">${err.code || err.message}</span><br>
+      ${err.code==='permission-denied'
+        ? 'الأغلب إن قواعد الحماية (Rules) في Firestore لسه مش محفوظة/منشورة صح، أو قاعدة البيانات مش متعملة أصلًا. راجع الخطوتين اللي بعتناهم قبل كده.'
+        : 'تأكد من الإنترنت وحاول تاني.'}`;
+    statusEl.style.color = 'var(--red)';
+    btn.disabled = false;
+    return;
+  }
+
   // Repair any students missing a code before publishing (e.g. after importing an old backup)
   if(ensureStudentCodes(DATA)) saveData(true);
 
+  statusEl.textContent = '⏳ جاري النشر...';
   let successCount = 0;
   const failed = [];
   for(const s of DATA.students){
     try{
-      if(!s.code) throw new Error('no code');
+      if(!s.code) throw { code:'no-code' };
       const payload = buildStudentPayload(s.id);
       await firebase.firestore().collection('students').doc(s.code).set(payload);
       successCount++;
     }catch(err){
-      failed.push(s.name);
+      failed.push(`${s.name} (${err.code || err.message || 'خطأ غير معروف'})`);
     }
   }
   if(failed.length===0){
@@ -2673,7 +2689,7 @@ async function portalLookup(){
   try{
     const doc = await firebase.firestore().collection('students').doc(code).get();
     if(!doc.exists){
-      resultBox.innerHTML = `<div class="pv-empty">الكود غير صحيح. تأكد منه مع المعلم/ة.</div>`;
+      resultBox.innerHTML = `<div class="pv-empty">الكود غير صحيح، أو لسه المعلم/ة ماعملش نشر لبيانات الطالب ده. تأكد من الكود مع المعلم/ة.</div>`;
       return;
     }
     const data = doc.data();
@@ -2685,7 +2701,7 @@ async function portalLookup(){
     resultBox.innerHTML = '';
     renderParentReport(data, 'portalResult');
   }catch(e){
-    resultBox.innerHTML = `<div class="pv-empty">حدث خطأ أثناء البحث. حاول مرة أخرى.</div>`;
+    resultBox.innerHTML = `<div class="pv-empty">حدث خطأ أثناء البحث (${e.code||e.message||'غير معروف'}). حاول مرة أخرى.</div>`;
   }
 }
 function pvTotalOf(rec){
