@@ -390,11 +390,27 @@
     <div class="card">
       <h2>النسخة الاحتياطية <span class="tag">BACKUP</span></h2>
       <div style="font-size:12.5px; color:#7b887f; margin-bottom:14px;">احفظ نسخة من كل بياناتك (الصفوف، المجموعات، الطلاب، الدرجات) كملف، أو استرجعها لاحقًا على نفس الجهاز أو جهاز آخر.</div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
         <button class="btn btn-teal" onclick="exportData()">⬇ نسخة احتياطية</button>
-        <button class="btn btn-import" onclick="document.getElementById('importFile').click()">⬆ استيراد بيانات</button>
-        <input type="file" id="importFile" accept=".json" onchange="importData(event)">
       </div>
+      <div style="font-size:12px; color:#7b887f; margin-bottom:6px;">استيراد نسخة احتياطية:</div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn btn-import" onclick="document.getElementById('importFileMerge').click()">🔗 دمج مع البيانات الحالية</button>
+        <button class="btn btn-danger" onclick="document.getElementById('importFileReplace').click()">⚠️ استبدال كامل</button>
+        <input type="file" id="importFileMerge" accept=".json" style="display:none;" onchange="importData(event, 'merge')">
+        <input type="file" id="importFileReplace" accept=".json" style="display:none;" onchange="importData(event, 'replace')">
+      </div>
+      <div style="font-size:11.5px; color:#8b988f; margin-top:8px;">
+        <b>دمج</b>: يضيف أي طالب/مجموعة/درجة موجودة في الملف ومش موجودة عندك دلوقتي، من غير ما يمسح أو يغيّر أي حاجة مسجلة بالفعل — الخيار الآمن دايمًا.<br>
+        <b>استبدال كامل</b>: يمسح كل البيانات الحالية ويستبدلها بالملف المستورد بالكامل — استخدمه بس لو متأكد.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>تنظيف الطلاب المكررين <span class="tag">CLEANUP</span></h2>
+      <div style="font-size:12.5px; color:#7b887f; margin-bottom:12px;">لو حصل استبدال كامل قبل كده، ممكن يكون بعض الطلاب اتسجلوا مرتين (بنفس الاسم) بدرجات متفرقة بين النسختين. الأداة دي بتدمجهم في سجل واحد بكل درجاتهم مع بعض، من غير ما تفقد أي درجة.</div>
+      <button class="btn btn-outline" onclick="mergeDuplicateStudents()">🧹 فحص ودمج الطلاب المكررين</button>
+      <div id="dupCleanupResult" style="margin-top:10px; font-size:12.5px; color:#7b887f;"></div>
     </div>
   </section>
 
@@ -2458,7 +2474,111 @@ function exportData(){
   a.download = 'gradebook-backup-' + new Date().toISOString().slice(0,10) + '.json';
   a.click();
 }
-function importData(e){
+function mergeDuplicateStudents(){
+  const resultBox = document.getElementById('dupCleanupResult');
+  // Group students by (name, stageId)
+  const groups = {};
+  DATA.students.forEach(s=>{
+    const key = s.name + '||' + s.stageId;
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(s);
+  });
+  const duplicateSets = Object.values(groups).filter(arr=>arr.length>1);
+  if(duplicateSets.length===0){
+    resultBox.textContent = '✓ مفيش طلاب مكررين — كل حاجة سليمة.';
+    resultBox.style.color = '#1E7B3C';
+    return;
+  }
+  const names = duplicateSets.map(set=>`${set[0].name} (×${set.length})`).join('، ');
+  if(!confirm(`لقيت ${duplicateSets.length} طالب مكرر:\n${names}\n\nهيتم دمج كل نسخة في سجل واحد بكل درجاتهم مع بعض. متابعة؟`)) return;
+
+  let mergedCount = 0;
+  let movedGrades = 0;
+  duplicateSets.forEach(set=>{
+    // Keep the one with the most existing grade records (most "complete"), or the first if tied
+    set.sort((a,b)=>{
+      const aCount = DATA.grades.filter(g=>g.studentId===a.id).length;
+      const bCount = DATA.grades.filter(g=>g.studentId===b.id).length;
+      return bCount - aCount;
+    });
+    const keeper = set[0];
+    const duplicates = set.slice(1);
+    duplicates.forEach(dup=>{
+      // Fill in any missing contact info on the keeper from the duplicate
+      if(!keeper.parentName && dup.parentName) keeper.parentName = dup.parentName;
+      if(!keeper.phone && dup.phone) keeper.phone = dup.phone;
+      if(!keeper.parentPhone && dup.parentPhone) keeper.parentPhone = dup.parentPhone;
+      // Move over any grade the keeper doesn't already have for that (group, session)
+      DATA.grades.filter(g=>g.studentId===dup.id).forEach(g=>{
+        const exists = DATA.grades.some(kg=>kg.studentId===keeper.id && kg.groupId===g.groupId && kg.session===g.session);
+        if(!exists){
+          g.studentId = keeper.id;
+          movedGrades++;
+        }
+      });
+      // Remove any leftover duplicate grade records that weren't moved, and the duplicate student itself
+      DATA.grades = DATA.grades.filter(g=>g.studentId!==dup.id);
+      DATA.students = DATA.students.filter(s=>s.id!==dup.id);
+      mergedCount++;
+    });
+  });
+  saveData();
+  refreshPanel(document.querySelector('nav.tabs button.active').dataset.tab);
+  resultBox.innerHTML = `✓ تم دمج ${mergedCount} سجل مكرر ونقل ${movedGrades} درجة للسجل الأساسي.`;
+  resultBox.style.color = '#1E7B3C';
+}
+function mergeImportedData(backup){
+  // Merge groups: match by (stageId, name) — reuse existing local group if found
+  const groupIdMap = {};
+  (backup.groups||[]).forEach(bg=>{
+    let localGroup = DATA.groups.find(g=>g.stageId===bg.stageId && g.name===bg.name);
+    if(!localGroup){
+      localGroup = { id: uid('g'), stageId: bg.stageId, name: bg.name };
+      DATA.groups.push(localGroup);
+    }
+    groupIdMap[bg.id] = localGroup.id;
+  });
+
+  // Merge students: match by (name, stageId) — keep the LOCAL student's id/data untouched if found
+  const studentIdMap = {};
+  let newStudents = 0;
+  (backup.students||[]).forEach(bs=>{
+    const mappedGroupId = groupIdMap[bs.groupId] || bs.groupId;
+    let localStudent = DATA.students.find(s=>s.name===bs.name && s.stageId===bs.stageId);
+    if(!localStudent){
+      localStudent = {
+        id: uid('s'), stageId: bs.stageId, groupId: mappedGroupId,
+        name: bs.name, parentName: bs.parentName||'', phone: bs.phone||'',
+        parentPhone: bs.parentPhone||'', code: bs.code || generateStudentCode(DATA.students)
+      };
+      DATA.students.push(localStudent);
+      newStudents++;
+    }
+    studentIdMap[bs.id] = localStudent.id;
+  });
+  ensureStudentCodes(DATA);
+
+  // Merge grades: only add a backup grade if there's no local grade for that
+  // (student, group, session) combo already — never overwrites existing local grades
+  let newGrades = 0;
+  (backup.grades||[]).forEach(bgrade=>{
+    const mappedStudentId = studentIdMap[bgrade.studentId];
+    const mappedGroupId = groupIdMap[bgrade.groupId] || bgrade.groupId;
+    if(!mappedStudentId) return;
+    const exists = DATA.grades.some(g=>g.studentId===mappedStudentId && g.groupId===mappedGroupId && g.session===bgrade.session);
+    if(!exists){
+      DATA.grades.push({
+        id: uid('gr'), groupId: mappedGroupId, studentId: mappedStudentId, session: bgrade.session,
+        attendance: bgrade.attendance, tasmee: bgrade.tasmee, wagib: bgrade.wagib,
+        exam: bgrade.exam, discipline: bgrade.discipline, performance: bgrade.performance
+      });
+      newGrades++;
+    }
+  });
+
+  return { newStudents, newGrades };
+}
+function importData(e, mode){
   const file = e.target.files[0];
   if(!file) return;
   const reader = new FileReader();
@@ -2466,19 +2586,26 @@ function importData(e){
     try{
       const parsed = JSON.parse(ev.target.result);
       if(!parsed.students || !parsed.groups || !parsed.grades){ throw new Error('bad format'); }
-      if(!confirm('سيتم استبدال البيانات الحالية بالكامل بالنسخة المستوردة. متابعة؟')) return;
-      DATA = parsed;
-      if(!DATA.currentStage) DATA.currentStage = STAGES[0].id;
-      if(!DATA.academicYear) DATA.academicYear = defaultAcademicYear();
-      if(typeof DATA.teacherName !== 'string') DATA.teacherName = '';
-      if(typeof DATA.subject !== 'string') DATA.subject = '';
-      if(!Array.isArray(DATA.students)) DATA.students = [];
-      const codesAdded = ensureStudentCodes(DATA);
-      saveData();
-      refreshPanel(document.querySelector('nav.tabs button.active').dataset.tab);
-      alert(codesAdded
-        ? 'تم استيراد البيانات بنجاح ✅ (تم توليد أكواد جديدة للطلاب اللي مكانش عندهم كود)'
-        : 'تم استيراد البيانات بنجاح ✅');
+
+      if(mode==='replace'){
+        if(!confirm('⚠️ سيتم حذف كل بياناتك الحالية واستبدالها بالكامل بالنسخة المستوردة. هل أنت متأكد؟')) { e.target.value=''; return; }
+        DATA = parsed;
+        if(!DATA.currentStage) DATA.currentStage = STAGES[0].id;
+        if(!DATA.academicYear) DATA.academicYear = defaultAcademicYear();
+        if(typeof DATA.teacherName !== 'string') DATA.teacherName = '';
+        if(typeof DATA.subject !== 'string') DATA.subject = '';
+        if(!Array.isArray(DATA.students)) DATA.students = [];
+        ensureStudentCodes(DATA);
+        saveData();
+        refreshPanel(document.querySelector('nav.tabs button.active').dataset.tab);
+        alert('تم الاستبدال الكامل بنجاح ✅');
+      } else {
+        if(!confirm('سيتم إضافة أي طالب أو مجموعة أو درجة موجودة في الملف ومش موجودة عندك دلوقتي، من غير ما يتغيّر أي حاجة مسجلة بالفعل. متابعة؟')) { e.target.value=''; return; }
+        const result = mergeImportedData(parsed);
+        saveData();
+        refreshPanel(document.querySelector('nav.tabs button.active').dataset.tab);
+        alert(`تم الدمج بنجاح ✅\nطلاب جدد تمت إضافتهم: ${result.newStudents}\nدرجات جديدة تمت إضافتها: ${result.newGrades}`);
+      }
     }catch(err){
       alert('تعذر قراءة الملف. تأكد أنه ملف نسخة احتياطية صحيح.');
     }
@@ -2566,13 +2693,18 @@ function buildStudentPayload(studentId){
 }
 
 /* ---- Publish to Firestore (students/{code}) — no auth needed, code is the access key ---- */
+function sanitizeForFirestore(obj){
+  // Belt-and-suspenders: round-trip through JSON so nothing non-JSON-safe
+  // (undefined, functions, etc.) can ever reach Firestore, regardless of source.
+  return JSON.parse(JSON.stringify(obj));
+}
 async function publishStudentPortal(studentId){
   const ok = await window.fbReady;
   if(!ok) return false;
   if(ensureStudentCodes(DATA)) saveData(true);
   const student = DATA.students.find(s=>s.id===studentId);
   if(!student || !student.code) return false;
-  const payload = buildStudentPayload(studentId);
+  const payload = sanitizeForFirestore(buildStudentPayload(studentId));
   const db = firebase.firestore();
   await db.collection('students').doc(student.code).set(payload);
   return true;
@@ -2611,21 +2743,24 @@ async function publishAllStudents(){
   statusEl.textContent = '⏳ جاري النشر...';
   let successCount = 0;
   const failed = [];
+  let firstErrorDetail = '';
   for(const s of DATA.students){
     try{
       if(!s.code) throw { code:'no-code' };
-      const payload = buildStudentPayload(s.id);
+      const payload = sanitizeForFirestore(buildStudentPayload(s.id));
       await firebase.firestore().collection('students').doc(s.code).set(payload);
       successCount++;
     }catch(err){
-      failed.push(`${s.name} (${err.code || err.message || 'خطأ غير معروف'})`);
+      failed.push(`${s.name} (${err.code || 'خطأ'})`);
+      if(!firstErrorDetail) firstErrorDetail = err.message || String(err);
     }
   }
   if(failed.length===0){
     statusEl.textContent = `✓ تم نشر تحديثات ${successCount} طالب بنجاح`;
     statusEl.style.color = '#1E7B3C';
   } else {
-    statusEl.innerHTML = `✓ تم نشر ${successCount} طالب — ⚠️ فشل نشر: ${failed.join('، ')}`;
+    statusEl.innerHTML = `✓ تم نشر ${successCount} طالب — ⚠️ فشل نشر: ${failed.join('، ')}`
+      + (firstErrorDetail ? `<br><span style="font-size:11px; opacity:0.8;">تفاصيل أول خطأ: ${firstErrorDetail}</span>` : '');
     statusEl.style.color = '#C88835';
   }
   btn.disabled = false;
