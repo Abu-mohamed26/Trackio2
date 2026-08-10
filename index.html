@@ -2678,17 +2678,18 @@ function buildStudentPayload(studentId){
     sub: DATA.subject || '',
     t: DATA.teacherName || '',
     y: DATA.academicYear || '',
-    // compact record encoding: [session, presentFlag, tasmee, wagib, exam, discipline, performance]
-    // every field is forced to a real value (number or null) — Firestore rejects "undefined" outright
-    r: records.map(r => [
-      Number(r.session),
-      r.attendance==='غائب' ? 0 : 1,
-      safeGradeNum(r.tasmee),
-      safeGradeNum(r.wagib),
-      safeGradeNum(r.exam),
-      safeGradeNum(r.discipline),
-      safeGradeNum(r.performance)
-    ])
+    // Each session is a plain object (map), NOT an array — Firestore does not support
+    // arrays nested directly inside arrays ("Nested arrays are not supported").
+    // Every field is forced to a real value (number or null); Firestore rejects "undefined" outright.
+    r: records.map(r => ({
+      s: Number(r.session),
+      p: r.attendance==='غائب' ? 0 : 1,
+      t: safeGradeNum(r.tasmee),
+      w: safeGradeNum(r.wagib),
+      e: safeGradeNum(r.exam),
+      d: safeGradeNum(r.discipline),
+      f: safeGradeNum(r.performance)
+    }))
   };
 }
 
@@ -2855,7 +2856,7 @@ async function portalLookup(){
   }
 }
 function pvTotalOf(rec){
-  const vals = [rec[2], rec[3], rec[4], rec[5], rec[6]].map(v=>Number(v)||0);
+  const vals = [rec.t, rec.w, rec.e, rec.d, rec.f].map(v=>Number(v)||0);
   return vals.reduce((a,b)=>a+b,0);
 }
 function renderParentReport(payload, containerId){
@@ -2878,7 +2879,7 @@ function renderParentReport(payload, containerId){
   // group into 8-session blocks
   const blocks = {};
   records.forEach(rec=>{
-    const session = rec[0];
+    const session = rec.s;
     const blockIndex = Math.ceil(session/8);
     if(!blocks[blockIndex]) blocks[blockIndex] = [];
     blocks[blockIndex].push(rec);
@@ -2886,7 +2887,7 @@ function renderParentReport(payload, containerId){
   const blockIndices = Object.keys(blocks).map(Number).sort((a,b)=>b-a); // most recent first
 
   blockIndices.forEach(bi=>{
-    const blockRecords = blocks[bi].sort((a,b)=>a[0]-b[0]);
+    const blockRecords = blocks[bi].sort((a,b)=>a.s-b.s);
     const start = (bi-1)*8+1, end = bi*8;
     const blockTotal = blockRecords.reduce((a,r)=>a+pvTotalOf(r),0);
     const blockAvg = blockTotal/blockRecords.length;
@@ -2897,7 +2898,7 @@ function renderParentReport(payload, containerId){
         <span class="level-badge ${blockLevel.css}">${blockLevel.label}</span>
       </h3>`;
     blockRecords.forEach(rec=>{
-      const [session, present, tasmee, wagib, exam, discipline, performance] = rec;
+      const { s: session, p: present, t: tasmee, w: wagib, e: exam, d: discipline, f: performance } = rec;
       const total = pvTotalOf(rec);
       const level = levelOf(total);
       html += `<div class="pv-session-row">
