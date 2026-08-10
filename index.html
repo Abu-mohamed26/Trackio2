@@ -2579,7 +2579,7 @@ async function publishAllStudents(){
   // Test write first — if this fails, every student will fail for the same reason,
   // so show one clear diagnostic instead of a long list of names.
   try{
-    await firebase.firestore().collection('students').doc('__diag__').set({ ts: Date.now() });
+    await firebase.firestore().collection('students').doc('zzz_diag_test').set({ ts: Date.now() });
   }catch(err){
     statusEl.innerHTML = `⚠️ فشل الاتصال بقاعدة البيانات — السبب: <span class="mono">${err.code || err.message}</span><br>
       ${err.code==='permission-denied'
