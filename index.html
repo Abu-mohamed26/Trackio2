@@ -2534,19 +2534,34 @@ function portalCodeMessage(student){
   const portalLink = location.origin + location.pathname + '#portal';
   return `مرحبًا، يمكنكم متابعة درجات ${student.name} أولًا بأول من خلال بوابة أولياء الأمور:\n${portalLink}\n\nاسم الطالب: ${student.name}\nالكود الخاص: ${student.code}\n\n(احتفظوا بالكود، هتحتاجوه في كل مرة تدخلوا فيها)`;
 }
+function safeGradeNum(v){
+  if(v===undefined || v===null || v==='') return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
 function buildStudentPayload(studentId){
   const student = DATA.students.find(s=>s.id===studentId);
   if(!student) return null;
-  const records = DATA.grades.filter(g=>g.studentId===studentId).sort((a,b)=>a.session-b.session);
+  const records = DATA.grades
+    .filter(g=>g.studentId===studentId && g.session!=null && !isNaN(Number(g.session)))
+    .sort((a,b)=>Number(a.session)-Number(b.session));
   return {
-    n: student.name,
-    st: stageName(student.stageId),
+    n: student.name || '',
+    st: stageName(student.stageId) || '',
     sub: DATA.subject || '',
     t: DATA.teacherName || '',
     y: DATA.academicYear || '',
     // compact record encoding: [session, presentFlag, tasmee, wagib, exam, discipline, performance]
-    r: records.map(r => [r.session, r.attendance==='غائب'?0:1,
-      r.tasmee ?? null, r.wagib ?? null, r.exam ?? null, r.discipline ?? null, r.performance ?? null])
+    // every field is forced to a real value (number or null) — Firestore rejects "undefined" outright
+    r: records.map(r => [
+      Number(r.session),
+      r.attendance==='غائب' ? 0 : 1,
+      safeGradeNum(r.tasmee),
+      safeGradeNum(r.wagib),
+      safeGradeNum(r.exam),
+      safeGradeNum(r.discipline),
+      safeGradeNum(r.performance)
+    ])
   };
 }
 
