@@ -388,12 +388,16 @@
     </div>
 
     <div class="card">
-      <h2>النسخة الاحتياطية <span class="tag">BACKUP</span></h2>
-      <div style="font-size:12.5px; color:#7b887f; margin-bottom:14px;">احفظ نسخة من كل بياناتك (الصفوف، المجموعات، الطلاب، الدرجات) كملف، أو استرجعها لاحقًا على نفس الجهاز أو جهاز آخر.</div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
-        <button class="btn btn-teal" onclick="exportData()">⬇ نسخة احتياطية</button>
+      <h2>النسخة الاحتياطية والبيانات <span class="tag">BACKUP</span></h2>
+
+      <div style="font-size:12px; font-weight:700; color:var(--accent-basic); margin-bottom:8px;">تصدير</div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn btn-teal" onclick="exportData()">⬇ حفظ نسخة احتياطية</button>
       </div>
-      <div style="font-size:12px; color:#7b887f; margin-bottom:6px;">استيراد نسخة احتياطية:</div>
+
+      <div style="border-top:1px dashed var(--paper-line); margin:16px 0;"></div>
+
+      <div style="font-size:12px; font-weight:700; color:var(--accent-basic); margin-bottom:8px;">استيراد</div>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <button class="btn btn-import" onclick="document.getElementById('importFileMerge').click()">🔗 دمج مع البيانات الحالية</button>
         <button class="btn btn-danger" onclick="document.getElementById('importFileReplace').click()">⚠️ استبدال كامل</button>
@@ -401,14 +405,12 @@
         <input type="file" id="importFileReplace" accept=".json" style="display:none;" onchange="importData(event, 'replace')">
       </div>
       <div style="font-size:11.5px; color:#8b988f; margin-top:8px;">
-        <b>دمج</b>: يضيف أي طالب/مجموعة/درجة موجودة في الملف ومش موجودة عندك دلوقتي، من غير ما يمسح أو يغيّر أي حاجة مسجلة بالفعل — الخيار الآمن دايمًا.<br>
-        <b>استبدال كامل</b>: يمسح كل البيانات الحالية ويستبدلها بالملف المستورد بالكامل — استخدمه بس لو متأكد.
+        <b>دمج</b> يضيف الجديد بدون ما يمسح أي حاجة (الخيار الآمن) — <b>استبدال كامل</b> يمسح بياناتك الحالية بالكامل.
       </div>
-    </div>
 
-    <div class="card">
-      <h2>تنظيف الطلاب المكررين <span class="tag">CLEANUP</span></h2>
-      <div style="font-size:12.5px; color:#7b887f; margin-bottom:12px;">لو حصل استبدال كامل قبل كده، ممكن يكون بعض الطلاب اتسجلوا مرتين (بنفس الاسم) بدرجات متفرقة بين النسختين. الأداة دي بتدمجهم في سجل واحد بكل درجاتهم مع بعض، من غير ما تفقد أي درجة.</div>
+      <div style="border-top:1px dashed var(--paper-line); margin:16px 0;"></div>
+
+      <div style="font-size:12px; font-weight:700; color:var(--accent-basic); margin-bottom:8px;">تنظيف الطلاب المكررين</div>
       <button class="btn btn-outline" onclick="mergeDuplicateStudents()">🧹 فحص ودمج الطلاب المكررين</button>
       <div id="dupCleanupResult" style="margin-top:10px; font-size:12.5px; color:#7b887f;"></div>
     </div>
@@ -426,19 +428,43 @@
       </div>
       <div id="stageSummary" class="empty-state">اختر صفًا دراسيًا لعرض ملخص المجموعات والطلاب المسجّلين به.</div>
     </div>
+
+    <div class="card">
+      <h2>ترحيل جماعي للطلاب <span class="tag">PROMOTE</span></h2>
+      <div style="font-size:13px; color:#7b887f; margin-bottom:14px;">لترحيل كل طلاب صف دراسي (أو مجموعة معينة) إلى الصف الأعلى — يتم نقل بياناتهم الأساسية فقط (الاسم، ولي الأمر، الأرقام) بدون سجل درجاتهم السابق، ليبدأوا العام الجديد بسجل نظيف. يُستخدم عادة بعد انتهاء العام الدراسي.</div>
+      <div class="field-row">
+        <div class="field">
+          <label>من الصف الدراسي</label>
+          <select id="promoteFromStage" onchange="fillPromoteFromGroups()"></select>
+        </div>
+        <div class="field">
+          <label>من المجموعة (اختياري)</label>
+          <select id="promoteFromGroup" onchange="updatePromoteCount()"></select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>إلى الصف الدراسي</label>
+          <select id="promoteToStage" onchange="fillPromoteToGroups()"></select>
+        </div>
+        <div class="field">
+          <label>إلى المجموعة</label>
+          <select id="promoteToGroup" onchange="togglePromoteNewGroupInput()"></select>
+        </div>
+      </div>
+      <div class="field-row" id="promoteNewGroupRow" style="display:none;">
+        <div class="field">
+          <label>اسم المجموعة الجديدة</label>
+          <input type="text" id="promoteNewGroupName" placeholder="مثال: مجموعة الأحد 4م">
+        </div>
+      </div>
+      <div id="promoteCountInfo" style="font-size:13px; color:#7b887f; margin-bottom:12px;"></div>
+      <button class="btn btn-primary" onclick="promoteStudents()">⇪ ترحيل الطلاب</button>
+    </div>
   </section>
 
   <!-- TAB 2: GROUP -->
   <section class="panel" id="panel-group">
-    <div class="card">
-      <h2>البحث عن طالب <span class="tag">SEARCH</span></h2>
-      <div class="field">
-        <label>اكتب اسم الطالب</label>
-        <input type="text" id="studentSearchInput" placeholder="ابدأ الكتابة للبحث..." oninput="renderStudentSearch()">
-      </div>
-      <div id="studentSearchResults" style="margin-top:12px;"></div>
-    </div>
-
     <div class="card">
       <h2>إدارة المجموعات <span class="tag">GROUPS</span></h2>
       <div class="field-row">
@@ -460,6 +486,15 @@
 
   <!-- TAB 3: STUDENTS -->
   <section class="panel" id="panel-students">
+    <div class="card">
+      <h2>البحث عن طالب <span class="tag">SEARCH</span></h2>
+      <div class="field">
+        <label>اكتب اسم الطالب</label>
+        <input type="text" id="studentSearchInput" placeholder="ابدأ الكتابة للبحث..." oninput="renderStudentSearch()">
+      </div>
+      <div id="studentSearchResults" style="margin-top:12px;"></div>
+    </div>
+
     <div class="card">
       <h2>تسجيل طالب جديد <span class="tag">ENROLL</span></h2>
       <div class="field-row">
@@ -509,39 +544,6 @@
       </div>
       <div id="studentsList"></div>
     </div>
-
-    <div class="card">
-      <h2>ترحيل جماعي للطلاب <span class="tag">PROMOTE</span></h2>
-      <div style="font-size:13px; color:#7b887f; margin-bottom:14px;">لترحيل كل طلاب صف دراسي (أو مجموعة معينة) إلى الصف الأعلى — يتم نقل بياناتهم الأساسية فقط (الاسم، ولي الأمر، الأرقام) بدون سجل درجاتهم السابق، ليبدأوا العام الجديد بسجل نظيف. يُستخدم عادة بعد انتهاء العام الدراسي.</div>
-      <div class="field-row">
-        <div class="field">
-          <label>من الصف الدراسي</label>
-          <select id="promoteFromStage" onchange="fillPromoteFromGroups()"></select>
-        </div>
-        <div class="field">
-          <label>من المجموعة (اختياري)</label>
-          <select id="promoteFromGroup" onchange="updatePromoteCount()"></select>
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label>إلى الصف الدراسي</label>
-          <select id="promoteToStage" onchange="fillPromoteToGroups()"></select>
-        </div>
-        <div class="field">
-          <label>إلى المجموعة</label>
-          <select id="promoteToGroup" onchange="togglePromoteNewGroupInput()"></select>
-        </div>
-      </div>
-      <div class="field-row" id="promoteNewGroupRow" style="display:none;">
-        <div class="field">
-          <label>اسم المجموعة الجديدة</label>
-          <input type="text" id="promoteNewGroupName" placeholder="مثال: مجموعة الأحد 4م">
-        </div>
-      </div>
-      <div id="promoteCountInfo" style="font-size:13px; color:#7b887f; margin-bottom:12px;"></div>
-      <button class="btn btn-primary" onclick="promoteStudents()">⇪ ترحيل الطلاب</button>
-    </div>
   </section>
 
   <!-- TAB 4: GRADES -->
@@ -563,6 +565,7 @@
         </div>
         <div class="field" style="justify-content:flex-end;">
           <button class="btn btn-outline" onclick="newSession()">+ حصة جديدة</button>
+          <button class="btn btn-danger" onclick="deleteSession()">🗑 حذف الحصة</button>
         </div>
       </div>
       <div id="gradesTableWrap"></div>
@@ -599,8 +602,6 @@
   <section class="panel" id="panel-contact">
     <div class="card">
       <h2>بوابة متابعة أولياء الأمور <span class="tag">PARENT PORTAL</span></h2>
-      <div style="font-size:12.5px; color:#7b887f; margin-bottom:6px;">رابط واحد بس تبعته لكل أولياء الأمور مرة واحدة. كل ولي أمر بيدخل عليه ويكتب اسم ابنه وكوده الخاص عشان يشوف درجاته بس — من غير ما يشوف أي طالب تاني.</div>
-      <div style="font-size:11.5px; color:#8b988f; margin-bottom:14px;">⚠️ ملحوظة: البيانات بتتحدث في البوابة بس لما تدوس "نشر التحديثات" (تحت) — مش أوتوماتيك على طول لحظة ما تكتب درجة. اضغطها بعد ما تخلص رصد درجات أي حصة أو أي مجموعة.</div>
 
       <div class="pv-student-card" style="text-align:right; padding:14px 16px;">
         <div style="font-size:12.5px; color:#7b887f; margin-bottom:6px;">رابط البوابة (ثابت لكل الطلاب — أرسله مرة واحدة في جروب أولياء الأمور)</div>
@@ -618,46 +619,7 @@
     </div>
 
     <div class="card">
-      <h2>إرسال النتائج لولي الأمر <span class="tag">WHATSAPP</span></h2>
-      <div class="field-row">
-        <div class="field">
-          <label>الصف الدراسي</label>
-          <select id="contactStageSelect" onchange="fillGroupsForContact()"></select>
-        </div>
-        <div class="field">
-          <label>المجموعة</label>
-          <select id="contactGroupSelect" onchange="fillStudentsForContact()"></select>
-        </div>
-        <div class="field">
-          <label>الطالب</label>
-          <select id="contactStudentSelect" onchange="fillSessionsForContact()"></select>
-        </div>
-        <div class="field">
-          <label>نوع التقرير</label>
-          <select id="contactReportType" onchange="buildMessage()">
-            <option value="single">حصة واحدة</option>
-            <option value="summary">ملخص جميع الحصص</option>
-          </select>
-        </div>
-      </div>
-      <div class="field-row" id="contactSessionRow">
-        <div class="field">
-          <label>رقم الحصة</label>
-          <select id="contactSessionSelect" onchange="buildMessage()"></select>
-        </div>
-      </div>
-      <h2 style="margin-top:20px;">معاينة الرسالة</h2>
-      <div class="msg-preview" id="msgPreview">اختر طالبًا لعرض معاينة الرسالة.</div>
-      <div id="analyticsBox"></div>
-      <div id="certOfferBox"></div>
-      <div style="margin-top:14px;">
-        <button class="btn btn-wa" onclick="sendWhatsApp()">📲 إرسال عبر واتساب</button>
-      </div>
-    </div>
-
-    <div class="card">
       <h2>إرسال جماعي لكل طلاب المجموعة <span class="tag">BULK</span></h2>
-      <div style="font-size:13px; color:#7b887f; margin-bottom:14px;">يجهّز رسالة مخصصة بدرجات كل طالب على حدة، وتضغط "إرسال" بجانب كل اسم لفتحها في واتساب مباشرة — أسرع من كتابة كل رسالة يدويًا.</div>
       <div class="field-row">
         <div class="field">
           <label>الصف الدراسي</label>
@@ -687,8 +649,6 @@
 
     <div class="card">
       <h2>رسائل عامة للمجموعة <span class="tag">ANNOUNCE</span></h2>
-      <div style="font-size:13px; color:#7b887f; margin-bottom:6px;">لإرسال إعلان عام لكل المجموعة (تعديل موعد، إلغاء حصة، تنبيه...) — منفصل تمامًا عن رسائل الدرجات. اكتب رسالة واحدة وابعتها لكل الأرقام بسرعة.</div>
-      <div style="font-size:12px; color:#8b988f; margin-bottom:14px;">⚠️ ملحوظة: واتساب لا يسمح لأي تطبيق خارجي بإنشاء جروب حقيقي تلقائيًا بأعضائه — ده قيد من واتساب نفسه لأسباب خصوصية. البديل العملي هنا: تجهيز نفس الرسالة لكل أرقام المجموعة دفعة واحدة تضغط عليها بالترتيب، أو نسخ كل الأرقام لإنشاء جروب/قائمة بث يدويًا بنفسك من واتساب.</div>
       <div class="field-row">
         <div class="field">
           <label>الصف الدراسي</label>
@@ -945,6 +905,7 @@ function renderStageTab(){
         </div>
       </div>`;
   }
+  renderPromotePanel();
 }
 function setCurrentStage(id){ DATA.currentStage = id; saveData(); renderStageTab(); }
 
@@ -954,7 +915,6 @@ function renderGroupTab(){
   fillStageOptions(sel, false);
   sel.value = DATA.currentStage;
   renderGroups();
-  renderStudentSearch();
 }
 let expandedGroupIds = new Set();
 function renderGroups(){
@@ -1210,7 +1170,7 @@ function renderSearchContactTargets(studentId){
 /* ---------------- TAB 3: STUDENTS ---------------- */
 function renderStudentsTab(){
   if(ensureStudentCodes(DATA)) saveData(true);
-  renderPromotePanel();
+  renderStudentSearch();
 
   const stuStage = document.getElementById('stuStageSelect');
   fillStageOptions(stuStage, false);
@@ -1495,6 +1455,18 @@ function newSession(){
   sel.value = nextNum;
   renderGradesTable();
 }
+function deleteSession(){
+  const groupId = document.getElementById('gradeGroupSelect').value;
+  const sessionSel = document.getElementById('sessionSelect');
+  if(!groupId || !sessionSel.value){ alert('اختر مجموعة وحصة أولًا'); return; }
+  const session = Number(sessionSel.value);
+  const count = DATA.grades.filter(g=>g.groupId===groupId && g.session===session).length;
+  if(!confirm(`سيتم حذف كل الدرجات المسجلة في حصة رقم ${session} لهذه المجموعة (${count} سجل). هل أنت متأكد؟`)) return;
+  DATA.grades = DATA.grades.filter(g=>!(g.groupId===groupId && g.session===session));
+  saveData(true);
+  showToast(`✓ تم حذف حصة رقم ${session}`);
+  loadGradeSessions();
+}
 
 /* ---------------- TAB: BEST (LEADERBOARD) ---------------- */
 function renderBestTab(){
@@ -1677,10 +1649,6 @@ function saveGrades(){
 
 /* ---------------- TAB 5: CONTACT ---------------- */
 function renderContactTab(){
-  const stageSel = document.getElementById('contactStageSelect');
-  fillStageOptions(stageSel, false);
-  stageSel.value = DATA.currentStage;
-  fillGroupsForContact();
   renderBulkContactTab();
   renderAnnTab();
   renderPvLinkTab();
