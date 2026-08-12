@@ -2892,6 +2892,13 @@ if(!tryRenderParentView()){
   renderBasicsTab();
 }
 
+// A click on the portal/parent link often just changes the URL hash without a
+// full page reload (same page, same origin) — force a reload so the app
+// re-evaluates which view to show (portal lookup, parent report, or the app).
+window.addEventListener('hashchange', ()=>{
+  location.reload();
+});
+
 /* ---------------- PWA: service worker registration ---------------- */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
