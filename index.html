@@ -1653,41 +1653,6 @@ function renderContactTab(){
   renderAnnTab();
   renderPvLinkTab();
 }
-function fillGroupsForContact(){
-  const stageId = document.getElementById('contactStageSelect').value;
-  const sel = document.getElementById('contactGroupSelect');
-  const groups = groupsByStage(stageId);
-  sel.innerHTML = groups.length
-    ? groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')
-    : `<option value="">لا توجد مجموعات</option>`;
-  fillStudentsForContact();
-}
-function fillStudentsForContact(){
-  const groupId = document.getElementById('contactGroupSelect').value;
-  const sel = document.getElementById('contactStudentSelect');
-  const students = studentsByGroup(groupId);
-  sel.innerHTML = students.length
-    ? students.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')
-    : `<option value="">لا يوجد طلاب</option>`;
-  fillSessionsForContact();
-}
-function fillSessionsForContact(){
-  const groupId = document.getElementById('contactGroupSelect').value;
-  const sel = document.getElementById('contactSessionSelect');
-  const sessions = sessionsForGroup(groupId);
-  sel.innerHTML = sessions.length
-    ? sessions.map(n=>`<option value="${n}">حصة رقم ${n}</option>`).join('')
-    : `<option value="">لا توجد حصص مسجلة</option>`;
-  document.getElementById('contactSessionRow').style.display =
-    document.getElementById('contactReportType').value==='summary' ? 'none' : 'flex';
-  buildMessage();
-}
-document.getElementById('contactReportType').addEventListener('change', ()=>{
-  document.getElementById('contactSessionRow').style.display =
-    document.getElementById('contactReportType').value==='summary' ? 'none' : 'flex';
-  buildMessage();
-});
-
 function totalOf(rec){
   const vals = [rec.tasmee, rec.wagib, rec.exam, rec.discipline, rec.performance].map(v=>Number(v)||0);
   return vals.reduce((a,b)=>a+b,0);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gradebook-cache-v2';
+const CACHE_NAME = 'gradebook-cache-v3';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -37,10 +37,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req)
+  // The app shell (navigations / index.html) always goes to the network FIRST,
+  // so any update reaches the user immediately. Cache is only a fallback for
+  // when there's no connection at all.
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req)
         .then((response) => {
           if (response && response.status === 200) {
             const copy = response.clone();
@@ -48,12 +50,23 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => {
-          if (req.mode === 'navigate') {
-            return caches.match('./index.html');
-          }
-          return new Response('', { status: 504, statusText: 'Offline' });
-        });
+        .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  // Static assets (icons, manifest): serve from cache instantly, but refresh
+  // the cache in the background so they stay current too.
+  event.respondWith(
+    caches.match(req).then((cached) => {
+      const fetchPromise = fetch(req).then((response) => {
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy)).catch(() => {});
+        }
+        return response;
+      }).catch(() => cached);
+      return cached || fetchPromise;
     })
   );
 });
