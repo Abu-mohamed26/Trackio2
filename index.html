@@ -384,7 +384,7 @@
           <input type="text" id="subjectInput" placeholder="مثال: اللغة الإنجليزية" onchange="saveBasicInfo()">
         </div>
       </div>
-      <div style="font-size:12.5px; color:#7b887f;">هذه البيانات تُدرج تلقائيًا في رسائل الواتساب (الحصة الواحدة وملخص الـ8 حصص) وفي شهادات التقدير.</div>
+      <div style="font-size:12.5px; color:#7b887f;">هذه البيانات تُدرج تلقائيًا في رسائل الواتساب (الحصة الواحدة وملخص الشهر) وفي شهادات التقدير.</div>
     </div>
 
     <div class="card">
@@ -579,7 +579,7 @@
   <section class="panel" id="panel-best">
     <div class="card">
       <h2>ترتيب المجموعة <span class="tag">LEADERBOARD</span></h2>
-      <div style="font-size:13px; color:#7b887f; margin-bottom:14px;">كل 8 حصص تمثّل شهرًا كاملًا (حصص 1-8 = الشهر الأول، 9-16 = الشهر الثاني، وهكذا) — الترتيب يُحسب على مجموع درجات الشهر المكتمل فقط.</div>
+      <div style="font-size:13px; color:#7b887f; margin-bottom:14px;">كل 8 حصص تمثّل شهرًا كاملًا (حصص 1-8 = الشهر الأول، 9-16 = الشهر الثاني، وهكذا) — الترتيب يُحسب على مجموع درجات الشهر المكتمل فقط. ملحوظة: في المرحلة الثانوية (أولى/ثانية/ثالثة ثانوي) كل 4 حصص تعتبر شهرًا بدلًا من 8.</div>
       <div class="field-row">
         <div class="field">
           <label>الصف الدراسي</label>
@@ -641,6 +641,12 @@
         <div class="field">
           <label>رقم الحصة</label>
           <select id="bulkSessionSelect"></select>
+        </div>
+      </div>
+      <div class="field-row" id="bulkMonthRow" style="display:none;">
+        <div class="field">
+          <label>الشهر</label>
+          <select id="bulkMonthSelect"></select>
         </div>
       </div>
       <button class="btn btn-primary" onclick="prepareBulkMessages()">📋 تجهيز رسائل المجموعة</button>
@@ -1484,14 +1490,21 @@ function fillBestGroups(){
     : `<option value="">لا توجد مجموعات</option>`;
   fillBestBlocks();
 }
+/* Secondary stages (s1/s2/s3) treat every 4 sessions as a "month"; prep and
+   primary stages keep the original 8-session month. */
+function getBlockSize(stageId){
+  return (stageId==='s1' || stageId==='s2' || stageId==='s3') ? 4 : 8;
+}
 function getGroupCompleteBlocks(groupId){
+  const group = DATA.groups.find(g=>g.id===groupId);
+  const blockSize = getBlockSize(group ? group.stageId : null);
   const sessions = sessionsForGroup(groupId);
   if(sessions.length===0) return [];
   const maxSession = Math.max(...sessions);
-  const totalBlocks = Math.floor(maxSession/8);
+  const totalBlocks = Math.floor(maxSession/blockSize);
   const blocks = [];
   for(let i=1;i<=totalBlocks;i++){
-    blocks.push({ blockIndex:i, start:(i-1)*8+1, end:i*8 });
+    blocks.push({ blockIndex:i, start:(i-1)*blockSize+1, end:i*blockSize, blockSize });
   }
   return blocks;
 }
@@ -1515,10 +1528,13 @@ function renderLeaderboard(){
   }
   const blocks = getGroupCompleteBlocks(groupId);
   if(blocks.length===0){
-    wrap.innerHTML = `<div class="empty-state">لسه المجموعة دي ماوصلتش لـ8 حصص عشان نقدر نحسب ترتيب الشهر الأول.</div>`;
+    const group = DATA.groups.find(g=>g.id===groupId);
+    const bs = getBlockSize(group ? group.stageId : null);
+    wrap.innerHTML = `<div class="empty-state">لسه المجموعة دي ماوصلتش لـ${bs} حصص عشان نقدر نحسب ترتيب الشهر الأول.</div>`;
     return;
   }
   const block = blocks.find(b=>b.blockIndex===blockIndex) || blocks[blocks.length-1];
+  const blockSize = block.blockSize;
   const students = studentsByGroup(groupId);
   if(students.length===0){
     wrap.innerHTML = `<div class="empty-state">لا يوجد طلاب في هذه المجموعة.</div>`;
@@ -1544,15 +1560,15 @@ function renderLeaderboard(){
   let html = ranked.map((r,i)=>{
     const cls = i<3 ? medalClass[i] : '';
     const icon = i<3 ? medalIcon[i] : (i+1);
-    const avgLevel = levelOf(r.total/8);
+    const avgLevel = levelOf(r.total/blockSize);
     const certEligible = i<2 && avgLevel.label==='ممتاز';
     return `<div class="rank-card ${cls}">
       <div class="rank-num">${icon}</div>
       <div class="rank-info">
         <b>${r.student.name}</b>
-        <div class="meta">${r.sessionsRecorded} من 8 حصص · بدون غياب · المستوى: ${avgLevel.label}</div>
+        <div class="meta">${r.sessionsRecorded} من ${blockSize} حصص · بدون غياب · المستوى: ${avgLevel.label}</div>
       </div>
-      <div class="rank-score">${r.total} / 560</div>
+      <div class="rank-score">${r.total} / ${blockSize*70}</div>
       ${certEligible ? `<button class="btn btn-outline btn-sm" style="margin-right:8px;" onclick="downloadCertificate('${r.student.id}','${groupId}')">🏆 شهادة</button>` : ''}
     </div>`;
   }).join('');
@@ -1667,7 +1683,7 @@ function levelOf(total){
   if(total>=35) return {label:'مقبول', css:'level-مقبول', color:'#B4622F'};
   return {label:'دون المستوى', css:'level-دونالمستوى', color:'#B4452F'};
 }
-function buildMessageForStudent(student, type, groupId, session){
+function buildMessageForStudent(student, type, groupId, session, month){
   let msg = `الأستاذ/ة يفيدكم بتقرير متابعة الطالب/ة *${student.name}*\n`;
   msg += `الصف: ${stageName(student.stageId)} — المجموعة: ${groupName(student.groupId)}\n`;
   if(DATA.subject && DATA.subject.trim()) msg += `المادة: ${DATA.subject.trim()}\n`;
@@ -1691,11 +1707,19 @@ function buildMessageForStudent(student, type, groupId, session){
       msg += `*المستوى: ${level.label}*`;
     }
   } else {
-    const records = DATA.grades.filter(g=>g.studentId===student.id).sort((a,b)=>a.session-b.session);
+    const allRecords = DATA.grades.filter(g=>g.studentId===student.id).sort((a,b)=>a.session-b.session);
+    let records = allRecords;
+    let monthLabel = '';
+    if(month){
+      const bs = getBlockSize(student.stageId);
+      const mStart = (month-1)*bs+1, mEnd = month*bs;
+      records = allRecords.filter(r=>r.session>=mStart && r.session<=mEnd);
+      monthLabel = ` — الشهر ${month} (حصص ${mStart}-${mEnd})`;
+    }
     if(records.length===0){
-      msg += `لا توجد حصص مسجلة لهذا الطالب بعد.`;
+      msg += month ? `لا توجد حصص مسجلة لهذا الطالب في هذا الشهر.` : `لا توجد حصص مسجلة لهذا الطالب بعد.`;
     } else {
-      msg += `📊 ملخص الأداء (${records.length} حصة)\n\n`;
+      msg += `📊 ملخص الأداء${monthLabel} (${records.length} حصة)\n\n`;
       records.forEach(rec=>{
         const total = totalOf(rec);
         msg += `حصة ${rec.session}: ${rec.attendance||'—'} — إجمالي ${total}/70 (${levelOf(total).label})\n`;
@@ -1706,8 +1730,8 @@ function buildMessageForStudent(student, type, groupId, session){
       msg += `*متوسط درجة الحصة: ${avgTotal.toFixed(1)} / 70*\n`;
       msg += `*المستوى العام: ${levelOf(avgTotal).label}*`;
 
-      const weakness = computeWeakness(records);
-      if(weakness.sessionsUsed>=8){
+      const weakness = computeWeakness(records, getBlockSize(student.stageId));
+      if(weakness.sessionsUsed>=weakness.blockSize){
         msg += `\n\n📅 تحليل الشهر ${weakness.blockIndex} (حصص ${weakness.blockStart}-${weakness.blockEnd}):`;
         if(weakness.strengths.length>0){
           msg += `\n\n✅ نقاط القوة:\n`;
@@ -1762,18 +1786,20 @@ function buildMessage(){
 /* ---- Performance analytics: chart + weakness report, aligned to fixed 8-session "month" blocks
    (sessions 1-8 = month 1, 9-16 = month 2, ...) rather than a rolling last-8 window,
    so a student's block always matches the group's monthly boundaries. ---- */
-function getSessionBlock(sessionNum){
-  const blockIndex = Math.ceil(sessionNum/8);
-  const start = (blockIndex-1)*8+1;
-  const end = blockIndex*8;
-  return { blockIndex, start, end };
+function getSessionBlock(sessionNum, blockSize){
+  blockSize = blockSize || 8;
+  const blockIndex = Math.ceil(sessionNum/blockSize);
+  const start = (blockIndex-1)*blockSize+1;
+  const end = blockIndex*blockSize;
+  return { blockIndex, start, end, blockSize };
 }
-function computeWeakness(records){
+function computeWeakness(records, blockSize){
+  blockSize = blockSize || 8;
   if(records.length===0){
-    return { metrics:[], items:[], strengths:[], sessionsUsed:0, blockIndex:0, blockStart:0, blockEnd:0 };
+    return { metrics:[], items:[], strengths:[], sessionsUsed:0, blockIndex:0, blockStart:0, blockEnd:0, blockSize };
   }
   const maxSession = Math.max(...records.map(r=>r.session));
-  const block = getSessionBlock(maxSession);
+  const block = getSessionBlock(maxSession, blockSize);
   const blockRecords = records.filter(r=>r.session>=block.start && r.session<=block.end);
   const n = blockRecords.length;
   const avg = key => blockRecords.reduce((a,r)=>a + (Number(r[key])||0), 0) / n;
@@ -1789,7 +1815,7 @@ function computeWeakness(records){
   ];
   const items = metrics.filter(m=>m.pct < m.threshold).sort((a,b)=>a.pct-b.pct);
   const strengths = metrics.filter(m=>m.pct >= m.strongThreshold).sort((a,b)=>b.pct-a.pct);
-  return { metrics, items, strengths, sessionsUsed:n, blockIndex:block.blockIndex, blockStart:block.start, blockEnd:block.end };
+  return { metrics, items, strengths, sessionsUsed:n, blockIndex:block.blockIndex, blockStart:block.start, blockEnd:block.end, blockSize };
 }
 
 function renderAnalytics(records, weakness, studentName){
@@ -1920,10 +1946,12 @@ function downloadChart(studentName){
    "ممتاز" average in a completed 8-session block, generated as a downloadable
    image (WhatsApp can't auto-attach images via a wa.me link, so the teacher
    downloads it here and attaches it manually alongside the message). ---- */
-function getCertificateStatus(studentId, groupId){
+function getCertificateStatus(studentId, groupId, monthOverride){
   const blocks = getGroupCompleteBlocks(groupId);
   if(blocks.length===0) return null;
-  const block = blocks[blocks.length-1];
+  const block = monthOverride
+    ? (blocks.find(b=>b.blockIndex===monthOverride) || blocks[blocks.length-1])
+    : blocks[blocks.length-1];
   const students = studentsByGroup(groupId);
   const eligible = students.map(s=>{
     const records = DATA.grades.filter(g=>g.groupId===groupId && g.studentId===s.id && g.session>=block.start && g.session<=block.end);
@@ -1934,7 +1962,7 @@ function getCertificateStatus(studentId, groupId){
 
   const idx = eligible.findIndex(r=>r.studentId===studentId);
   if(idx<0 || idx>1) return null;
-  const avgLevel = levelOf(eligible[idx].total/8);
+  const avgLevel = levelOf(eligible[idx].total/block.blockSize);
   if(avgLevel.label!=='ممتاز') return null;
   return { rank: idx+1, block, total: eligible[idx].total };
 }
@@ -2222,18 +2250,31 @@ function fillBulkSessions(){
   sel.innerHTML = sessions.length
     ? sessions.map(n=>`<option value="${n}">حصة رقم ${n}</option>`).join('')
     : `<option value="">لا توجد حصص مسجلة</option>`;
+  fillBulkMonths();
   toggleBulkSessionRow();
   document.getElementById('bulkList').innerHTML = '';
 }
+function fillBulkMonths(){
+  const groupId = document.getElementById('bulkGroupSelect').value;
+  const sel = document.getElementById('bulkMonthSelect');
+  const blocks = groupId ? getGroupCompleteBlocks(groupId) : [];
+  sel.innerHTML = blocks.length
+    ? blocks.map(b=>`<option value="${b.blockIndex}">الشهر ${b.blockIndex} (حصص ${b.start}-${b.end})</option>`).join('')
+    : `<option value="">لسه مفيش شهر مكتمل</option>`;
+  if(blocks.length>0) sel.value = blocks[blocks.length-1].blockIndex;
+}
 function toggleBulkSessionRow(){
-  document.getElementById('bulkSessionRow').style.display =
-    document.getElementById('bulkReportType').value==='summary' ? 'none' : 'flex';
+  const isSummary = document.getElementById('bulkReportType').value==='summary';
+  document.getElementById('bulkSessionRow').style.display = isSummary ? 'none' : 'flex';
+  document.getElementById('bulkMonthRow').style.display = isSummary ? 'flex' : 'none';
 }
 function prepareBulkMessages(){
   const groupId = document.getElementById('bulkGroupSelect').value;
   if(!groupId){ alert('اختر مجموعة أولًا'); return; }
   const type = document.getElementById('bulkReportType').value;
   const session = type==='single' ? Number(document.getElementById('bulkSessionSelect').value) : null;
+  const monthSel = document.getElementById('bulkMonthSelect');
+  const month = (type==='summary' && monthSel.value) ? Number(monthSel.value) : null;
   const students = studentsByGroup(groupId);
   const listBox = document.getElementById('bulkList');
   if(students.length===0){
@@ -2242,9 +2283,9 @@ function prepareBulkMessages(){
   }
   listBox.innerHTML = `<div style="font-size:12.5px;color:#7b887f;margin-bottom:10px;">تم تجهيز ${students.length} رسالة. اضغط "إرسال" بجانب كل طالب لفتح واتساب برسالته الخاصة.</div>` +
     students.map(s=>{
-      const msg = buildMessageForStudent(s, type, groupId, session);
+      const msg = buildMessageForStudent(s, type, groupId, session, month);
       const hasPhone = !!s.parentPhone;
-      const certStatus = type==='summary' ? getCertificateStatus(s.id, groupId) : null;
+      const certStatus = type==='summary' ? getCertificateStatus(s.id, groupId, month) : null;
       return `<div class="student-card">
         <div class="student-info"><b>${s.name}</b><div class="meta">${hasPhone ? 'هاتف ولي الأمر: '+s.parentPhone : 'لا يوجد رقم هاتف مسجل'}${certStatus ? ' · 🏆 مؤهل لشهادة تقدير' : ''}</div></div>
         <div class="student-actions">
@@ -2611,6 +2652,7 @@ function buildStudentPayload(studentId){
     sub: DATA.subject || '',
     t: DATA.teacherName || '',
     y: DATA.academicYear || '',
+    bs: getBlockSize(student.stageId),
     // Each session is a plain object (map), NOT an array — Firestore does not support
     // arrays nested directly inside arrays ("Nested arrays are not supported").
     // Every field is forced to a real value (number or null); Firestore rejects "undefined" outright.
@@ -2809,11 +2851,12 @@ function renderParentReport(payload, containerId){
     document.getElementById(containerId).innerHTML = html;
     return;
   }
-  // group into 8-session blocks
+  // group into blocks (block size depends on the student's stage — embedded in payload)
+  const blockSize = payload.bs || 8;
   const blocks = {};
   records.forEach(rec=>{
     const session = rec.s;
-    const blockIndex = Math.ceil(session/8);
+    const blockIndex = Math.ceil(session/blockSize);
     if(!blocks[blockIndex]) blocks[blockIndex] = [];
     blocks[blockIndex].push(rec);
   });
@@ -2821,7 +2864,7 @@ function renderParentReport(payload, containerId){
 
   blockIndices.forEach(bi=>{
     const blockRecords = blocks[bi].sort((a,b)=>a.s-b.s);
-    const start = (bi-1)*8+1, end = bi*8;
+    const start = (bi-1)*blockSize+1, end = bi*blockSize;
     const blockTotal = blockRecords.reduce((a,r)=>a+pvTotalOf(r),0);
     const blockAvg = blockTotal/blockRecords.length;
     const blockLevel = levelOf(blockAvg);
