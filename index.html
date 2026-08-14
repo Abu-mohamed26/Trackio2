@@ -611,8 +611,18 @@
         </div>
       </div>
 
+      <div class="field-row">
+        <div class="field">
+          <label>الصف الدراسي</label>
+          <select id="publishStageSelect" onchange="fillPublishGroups()"></select>
+        </div>
+        <div class="field">
+          <label>المجموعة</label>
+          <select id="publishGroupSelect"></select>
+        </div>
+      </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
-        <button class="btn btn-primary" id="publishAllBtn" onclick="publishAllStudents()">📡 نشر التحديثات لكل الطلاب</button>
+        <button class="btn btn-primary" id="publishAllBtn" onclick="publishAllStudents()">📡 نشر التحديثات</button>
         <span id="publishAllStatus" style="font-size:12.5px; color:#7b887f;"></span>
       </div>
       <div id="pvFbStatus" style="font-size:11.5px; margin-bottom:6px;"></div>
@@ -2605,7 +2615,18 @@ function renderPvLinkTab(){
   document.getElementById('portalLinkBox').textContent = portalLink;
   document.getElementById('publishAllStatus').textContent = '';
   if(ensureStudentCodes(DATA)) saveData(true);
+  const stageSel = document.getElementById('publishStageSelect');
+  fillStageOptions(stageSel, true);
+  stageSel.value = '';
+  fillPublishGroups();
   updateFbStatusNote();
+}
+function fillPublishGroups(){
+  const stageId = document.getElementById('publishStageSelect').value;
+  const sel = document.getElementById('publishGroupSelect');
+  const groups = stageId ? groupsByStage(stageId) : DATA.groups;
+  sel.innerHTML = `<option value="">كل المجموعات</option>` +
+    groups.map(g=>`<option value="${g.id}">${g.name}${stageId?'':' — '+stageName(g.stageId)}</option>`).join('');
 }
 function updateFbStatusNote(){
   const statusEl = document.getElementById('pvFbStatus');
@@ -2688,7 +2709,12 @@ async function publishStudentPortal(studentId){
 async function publishAllStudents(){
   const btn = document.getElementById('publishAllBtn');
   const statusEl = document.getElementById('publishAllStatus');
-  if(DATA.students.length===0){ statusEl.textContent = 'لا يوجد طلاب لنشرهم.'; return; }
+  const stageId = document.getElementById('publishStageSelect').value;
+  const groupId = document.getElementById('publishGroupSelect').value;
+  let targets = DATA.students;
+  if(groupId) targets = targets.filter(s=>s.groupId===groupId);
+  else if(stageId) targets = targets.filter(s=>s.stageId===stageId);
+  if(targets.length===0){ statusEl.textContent = 'لا يوجد طلاب مطابقين لهذا الاختيار.'; return; }
   btn.disabled = true;
   statusEl.textContent = '⏳ جاري الفحص...';
   statusEl.style.color = '#7b887f';
@@ -2720,7 +2746,7 @@ async function publishAllStudents(){
   let successCount = 0;
   const failed = [];
   let firstErrorDetail = '';
-  for(const s of DATA.students){
+  for(const s of targets){
     try{
       if(!s.code) throw { code:'no-code' };
       const payload = sanitizeForFirestore(buildStudentPayload(s.id));
