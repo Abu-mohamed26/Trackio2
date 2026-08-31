@@ -195,6 +195,11 @@
   }
   select.g-attendance{ font-weight:600; }
   select.g-attendance option[value="غائب"]{ color:var(--red); }
+  #gradesTableWrap input:disabled{
+    background:#EDEFEE !important; color:#9CA3AF !important; cursor:not-allowed;
+    border-color:var(--paper-line) !important; box-shadow:none !important;
+  }
+  tr.row-absent{ background:#FBF5F3; }
 
   .btn{
     border:none; cursor:pointer; font-family:'Cairo',sans-serif; font-weight:700;
@@ -1781,10 +1786,12 @@ function renderGradesTable(){
   };
   const rows = students.map(s=>{
     const rec = DATA.grades.find(g=>g.groupId===groupId && g.session===session && g.studentId===s.id) || {};
+    const isAbsent = rec.attendance==='غائب';
+    const dis = isAbsent ? 'disabled' : '';
     const tasmeeCell = noTasmee
       ? `<input type="text" class="g-tasmee" value="لا يوجد" disabled style="text-align:center; color:#9CA3AF; background:#F3F4F6;">`
-      : `<input type="number" class="g-tasmee" min="0" max="${sessMax.tasmee}" value="${toDisplay(rec.tasmee, 20, sessMax.tasmee)}" placeholder="/${sessMax.tasmee}">`;
-    return `<tr data-student="${s.id}">
+      : `<input type="number" class="g-tasmee" min="0" max="${sessMax.tasmee}" value="${isAbsent?'':toDisplay(rec.tasmee, 20, sessMax.tasmee)}" placeholder="/${sessMax.tasmee}" ${dis}>`;
+    return `<tr data-student="${s.id}" class="${isAbsent?'row-absent':''}">
       <td class="mono">${session}</td>
       <td style="text-align:right; font-weight:600;">${s.name}</td>
       <td>
@@ -1794,10 +1801,10 @@ function renderGradesTable(){
         </select>
       </td>
       <td>${tasmeeCell}</td>
-      <td><input type="number" class="g-wagib" min="0" max="${sessMax.wagib}" value="${toDisplay(rec.wagib, 20, sessMax.wagib)}" placeholder="/${sessMax.wagib}"></td>
-      <td><input type="number" class="g-exam" min="0" max="${sessMax.exam}" value="${toDisplay(rec.exam, 10, sessMax.exam)}" placeholder="/${sessMax.exam}"></td>
-      <td><input type="number" class="g-discipline" min="0" max="10" value="${rec.discipline ?? 10}" placeholder="/10"></td>
-      <td><input type="number" class="g-performance" min="0" max="10" value="${rec.performance ?? 10}" placeholder="/10"></td>
+      <td><input type="number" class="g-wagib" min="0" max="${sessMax.wagib}" value="${isAbsent?'':toDisplay(rec.wagib, 20, sessMax.wagib)}" placeholder="/${sessMax.wagib}" ${dis}></td>
+      <td><input type="number" class="g-exam" min="0" max="${sessMax.exam}" value="${isAbsent?'':toDisplay(rec.exam, 10, sessMax.exam)}" placeholder="/${sessMax.exam}" ${dis}></td>
+      <td><input type="number" class="g-discipline" min="0" max="10" value="${isAbsent?'':(rec.discipline ?? 10)}" placeholder="/10" ${dis}></td>
+      <td><input type="number" class="g-performance" min="0" max="10" value="${isAbsent?'':(rec.performance ?? 10)}" placeholder="/10" ${dis}></td>
     </tr>`;
   }).join('');
   wrap.innerHTML = `<table>
@@ -1860,14 +1867,18 @@ function collectGradesFromTable(){
   document.querySelectorAll('#gradesTableWrap tbody tr').forEach(tr=>{
     const studentId = tr.dataset.student;
     const clamp10 = (v) => { v = Number(v); if(isNaN(v) || v==='') return null; return proportionalClamp(v, 10); };
-    const rec = {
-      attendance: tr.querySelector('.g-attendance').value,
-      tasmee: noTasmee ? null : clampAndScale(tr.querySelector('.g-tasmee').value, sessMax.tasmee, 20),
-      wagib: clampAndScale(tr.querySelector('.g-wagib').value, sessMax.wagib, 20),
-      exam: clampAndScale(tr.querySelector('.g-exam').value, sessMax.exam, 10),
-      discipline: clamp10(tr.querySelector('.g-discipline').value),
-      performance: clamp10(tr.querySelector('.g-performance').value),
-    };
+    const attendance = tr.querySelector('.g-attendance').value;
+    const isAbsent = attendance==='غائب';
+    const rec = isAbsent
+      ? { attendance, tasmee:null, wagib:null, exam:null, discipline:null, performance:null }
+      : {
+          attendance,
+          tasmee: noTasmee ? null : clampAndScale(tr.querySelector('.g-tasmee').value, sessMax.tasmee, 20),
+          wagib: clampAndScale(tr.querySelector('.g-wagib').value, sessMax.wagib, 20),
+          exam: clampAndScale(tr.querySelector('.g-exam').value, sessMax.exam, 10),
+          discipline: clamp10(tr.querySelector('.g-discipline').value),
+          performance: clamp10(tr.querySelector('.g-performance').value),
+        };
     const existingIdx = DATA.grades.findIndex(g=>g.groupId===groupId && g.session===session && g.studentId===studentId);
     if(existingIdx>-1){
       DATA.grades[existingIdx] = { ...DATA.grades[existingIdx], ...rec };
@@ -1905,7 +1916,11 @@ function attachGradesAutosave(){
     applyClampTo(e.target);
   }, true);
   wrap.addEventListener('change', (e)=>{
-    if(e.target.classList.contains('g-attendance')){ collectGradesFromTable(); saveData(); }
+    if(e.target.classList.contains('g-attendance')){
+      collectGradesFromTable();
+      saveData();
+      renderGradesTable();
+    }
   });
 }
 function saveGrades(){
