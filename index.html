@@ -568,6 +568,14 @@
           <button class="btn btn-danger" onclick="deleteSession()">🗑 حذف الحصة</button>
         </div>
       </div>
+      <div id="sessionMaxBar" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;"></div>
+      <div id="sessionMaxPanel" style="display:none; margin-bottom:14px;"></div>
+      <div style="margin-bottom:10px;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; color:#7b887f;">
+          <input type="checkbox" id="noTasmeeToggle" onchange="toggleNoTasmee()">
+          لا يوجد تسميع في هذه الحصة (لكل الطلاب)
+        </label>
+      </div>
       <div id="gradesTableWrap"></div>
       <div style="margin-top:14px; display:flex; gap:10px;">
         <button class="btn btn-primary" onclick="saveGrades()">💾 حفظ درجات الحصة</button>
@@ -595,6 +603,26 @@
         </div>
       </div>
       <div id="leaderboardWrap"></div>
+    </div>
+
+    <div class="card">
+      <h2>أوائل الحصة <span class="tag">SESSION TOP 5</span></h2>
+      <div style="font-size:13px; color:#7b887f; margin-bottom:14px;">أفضل 5 طلاب في حصة واحدة بالذات، بناءً على إجمالي درجة تلك الحصة فقط (من 70).</div>
+      <div class="field-row">
+        <div class="field">
+          <label>الصف الدراسي</label>
+          <select id="sessTopStageSelect" onchange="fillSessTopGroups()"></select>
+        </div>
+        <div class="field">
+          <label>المجموعة</label>
+          <select id="sessTopGroupSelect" onchange="fillSessTopSessions()"></select>
+        </div>
+        <div class="field">
+          <label>رقم الحصة</label>
+          <select id="sessTopSessionSelect" onchange="renderSessionTop()"></select>
+        </div>
+      </div>
+      <div id="sessionTopWrap"></div>
     </div>
   </section>
 
@@ -626,6 +654,13 @@
         <span id="publishAllStatus" style="font-size:12.5px; color:#7b887f;"></span>
       </div>
       <div id="pvFbStatus" style="font-size:11.5px; margin-bottom:6px;"></div>
+      <div id="publishNotifyWrap" style="margin-top:10px;"></div>
+
+      <div style="border-top:1px dashed var(--paper-line); margin:16px 0;"></div>
+
+      <div style="font-size:12px; font-weight:700; color:var(--accent-contact); margin-bottom:6px;">تنبيه أولياء الأمور بسهولة (مرة واحدة بس)</div>
+      <div style="font-size:11.5px; color:#8b988f; margin-bottom:10px;">حمّل جهات اتصال أولياء الأمور (حسب الصف/المجموعة المختارة فوق) وأضفهم لجهات جهازك بضغطة واحدة، وبعدين اعمل جروب واتساب أو قائمة بث بيهم مرة واحدة. من بعدها، أي تحديث تبعته هيوصل الكل برسالة واحدة بدل ما تبعت لكل طالب لوحده.</div>
+      <button class="btn btn-outline" onclick="downloadParentContactsVCF()">⬇ تحميل جهات اتصال أولياء الأمور</button>
     </div>
 
     <div class="card">
@@ -1490,6 +1525,11 @@ function renderBestTab(){
   fillStageOptions(stageSel, false);
   stageSel.value = DATA.currentStage;
   fillBestGroups();
+
+  const sessTopStageSel = document.getElementById('sessTopStageSelect');
+  fillStageOptions(sessTopStageSel, false);
+  sessTopStageSel.value = DATA.currentStage;
+  fillSessTopGroups();
 }
 function fillBestGroups(){
   const stageId = document.getElementById('bestStageSelect').value;
@@ -1591,17 +1631,159 @@ function renderLeaderboard(){
   wrap.innerHTML = html;
 }
 
+function fillSessTopGroups(){
+  const stageId = document.getElementById('sessTopStageSelect').value;
+  const sel = document.getElementById('sessTopGroupSelect');
+  const groups = groupsByStage(stageId);
+  sel.innerHTML = groups.length
+    ? groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')
+    : `<option value="">لا توجد مجموعات</option>`;
+  fillSessTopSessions();
+}
+function fillSessTopSessions(){
+  const groupId = document.getElementById('sessTopGroupSelect').value;
+  const sel = document.getElementById('sessTopSessionSelect');
+  const sessions = sessionsForGroup(groupId);
+  sel.innerHTML = sessions.length
+    ? sessions.map(n=>`<option value="${n}">حصة رقم ${n}</option>`).join('')
+    : `<option value="">لا توجد حصص مسجلة</option>`;
+  if(sessions.length>0) sel.value = Math.max(...sessions);
+  renderSessionTop();
+}
+function renderSessionTop(){
+  const wrap = document.getElementById('sessionTopWrap');
+  const groupId = document.getElementById('sessTopGroupSelect').value;
+  const session = Number(document.getElementById('sessTopSessionSelect').value);
+  if(!groupId || !session){
+    wrap.innerHTML = `<div class="empty-state">اختر مجموعة وحصة لعرض أوائلها.</div>`;
+    return;
+  }
+  const students = studentsByGroup(groupId);
+  if(students.length===0){
+    wrap.innerHTML = `<div class="empty-state">لا يوجد طلاب في هذه المجموعة.</div>`;
+    return;
+  }
+  const results = students.map(s=>{
+    const rec = DATA.grades.find(g=>g.groupId===groupId && g.studentId===s.id && g.session===session);
+    return { student:s, rec, total: rec ? totalOf(rec) : null, present: rec ? rec.attendance!=='غائب' : null };
+  }).filter(r=>r.rec && r.present); // exclude students absent or with no record for this session
+
+  if(results.length===0){
+    wrap.innerHTML = `<div class="empty-state">لا توجد درجات حاضرة مسجلة لهذه الحصة بعد.</div>`;
+    return;
+  }
+  results.sort((a,b)=>b.total-a.total);
+  const top5 = results.slice(0,5);
+
+  const medalClass = ['top1','top2','top3'];
+  const medalIcon = ['🥇','🥈','🥉'];
+  wrap.innerHTML = top5.map((r,i)=>{
+    const cls = i<3 ? medalClass[i] : '';
+    const icon = i<3 ? medalIcon[i] : (i+1);
+    const level = levelOf(r.total);
+    return `<div class="rank-card ${cls}">
+      <div class="rank-num">${icon}</div>
+      <div class="rank-info">
+        <b>${r.student.name}</b>
+        <div class="meta">المستوى: ${level.label}</div>
+      </div>
+      <div class="rank-score">${r.total} / 70</div>
+    </div>`;
+  }).join('');
+}
+
+function getSessionMax(groupId, session){
+  const key = groupId + '_' + session;
+  const custom = DATA.sessionMax && DATA.sessionMax[key];
+  return {
+    tasmee: (custom && custom.tasmee) || 20,
+    wagib: (custom && custom.wagib) || 20,
+    exam: (custom && custom.exam) || 10
+  };
+}
+function renderSessionMaxBar(){
+  const bar = document.getElementById('sessionMaxBar');
+  const groupId = document.getElementById('gradeGroupSelect').value;
+  const session = Number(document.getElementById('sessionSelect').value);
+  if(!groupId || !session){ bar.innerHTML = ''; return; }
+  const m = getSessionMax(groupId, session);
+  bar.innerHTML = `
+    <span style="font-size:12.5px; color:#7b887f;">الدرجة القصوى لهذه الحصة:</span>
+    <span class="mono" style="background:rgba(225,103,59,0.1); border:1px solid rgba(225,103,59,0.3); padding:3px 9px; border-radius:6px; font-size:12.5px;">تسميع ${m.tasmee}</span>
+    <span class="mono" style="background:rgba(225,103,59,0.1); border:1px solid rgba(225,103,59,0.3); padding:3px 9px; border-radius:6px; font-size:12.5px;">واجب ${m.wagib}</span>
+    <span class="mono" style="background:rgba(225,103,59,0.1); border:1px solid rgba(225,103,59,0.3); padding:3px 9px; border-radius:6px; font-size:12.5px;">امتحان ${m.exam}</span>
+    <button class="btn btn-outline btn-sm" onclick="toggleSessionMaxPanel()">⚙️ تغيير الدرجة القصوى لهذه الحصة</button>
+  `;
+}
+function toggleSessionMaxPanel(){
+  const panel = document.getElementById('sessionMaxPanel');
+  if(panel.style.display==='none'){
+    const groupId = document.getElementById('gradeGroupSelect').value;
+    const session = Number(document.getElementById('sessionSelect').value);
+    const m = getSessionMax(groupId, session);
+    panel.innerHTML = `
+      <div class="field-row" style="align-items:flex-end;">
+        <div class="field">
+          <label>الدرجة القصوى للتسميع</label>
+          <input type="number" id="maxTasmeeInput" min="1" value="${m.tasmee}">
+        </div>
+        <div class="field">
+          <label>الدرجة القصوى للواجب</label>
+          <input type="number" id="maxWagibInput" min="1" value="${m.wagib}">
+        </div>
+        <div class="field">
+          <label>الدرجة القصوى لامتحان الحصة</label>
+          <input type="number" id="maxExamInput" min="1" value="${m.exam}">
+        </div>
+        <div class="field" style="flex:0;">
+          <button class="btn btn-primary" onclick="saveSessionMax()">💾 حفظ</button>
+        </div>
+      </div>
+      <div style="font-size:11.5px; color:#8b988f; margin-top:4px;">التغيير ده خاص بهذه الحصة بس، مش هيأثر على باقي الحصص.</div>
+    `;
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = 'none';
+  }
+}
+function saveSessionMax(){
+  const groupId = document.getElementById('gradeGroupSelect').value;
+  const session = Number(document.getElementById('sessionSelect').value);
+  const tasmee = Number(document.getElementById('maxTasmeeInput').value) || 20;
+  const wagib = Number(document.getElementById('maxWagibInput').value) || 20;
+  const exam = Number(document.getElementById('maxExamInput').value) || 10;
+  if(!DATA.sessionMax) DATA.sessionMax = {};
+  DATA.sessionMax[groupId + '_' + session] = { tasmee, wagib, exam };
+  saveData(true);
+  document.getElementById('sessionMaxPanel').style.display = 'none';
+  renderSessionMaxBar();
+  renderGradesTable();
+  showToast('✓ تم تحديث الدرجة القصوى لهذه الحصة');
+}
 function renderGradesTable(){
   const groupId = document.getElementById('gradeGroupSelect').value;
   const session = Number(document.getElementById('sessionSelect').value);
   const wrap = document.getElementById('gradesTableWrap');
+  renderSessionMaxBar();
   const students = studentsByGroup(groupId);
+  const noTasmeeCheckbox = document.getElementById('noTasmeeToggle');
+  const noTasmee = getNoTasmee(groupId, session);
+  if(noTasmeeCheckbox) noTasmeeCheckbox.checked = noTasmee;
   if(!groupId || students.length===0){
     wrap.innerHTML = `<div class="empty-state">لا يوجد طلاب في هذه المجموعة بعد. أضفهم من تبويب "تسجيل الطلاب".</div>`;
     return;
   }
+  const sessMax = getSessionMax(groupId, session);
+  const toDisplay = (stored, standardMax, customMax) => {
+    if(stored==null) return '';
+    if(customMax === standardMax) return stored;
+    return Math.round((stored/standardMax)*customMax*10)/10;
+  };
   const rows = students.map(s=>{
     const rec = DATA.grades.find(g=>g.groupId===groupId && g.session===session && g.studentId===s.id) || {};
+    const tasmeeCell = noTasmee
+      ? `<input type="text" class="g-tasmee" value="لا يوجد" disabled style="text-align:center; color:#9CA3AF; background:#F3F4F6;">`
+      : `<input type="number" class="g-tasmee" min="0" max="${sessMax.tasmee}" value="${toDisplay(rec.tasmee, 20, sessMax.tasmee)}" placeholder="/${sessMax.tasmee}">`;
     return `<tr data-student="${s.id}">
       <td class="mono">${session}</td>
       <td style="text-align:right; font-weight:600;">${s.name}</td>
@@ -1611,37 +1793,80 @@ function renderGradesTable(){
           <option value="غائب" ${rec.attendance==='غائب'?'selected':''}>غائب</option>
         </select>
       </td>
-      <td><input type="number" class="g-tasmee" min="0" max="20" value="${rec.tasmee ?? ''}" placeholder="/20"></td>
-      <td><input type="number" class="g-wagib" min="0" max="20" value="${rec.wagib ?? ''}" placeholder="/20"></td>
-      <td><input type="number" class="g-exam" min="0" max="10" value="${rec.exam ?? ''}" placeholder="/10"></td>
-      <td><input type="number" class="g-discipline" min="0" max="10" value="${rec.discipline ?? ''}" placeholder="/10"></td>
-      <td><input type="number" class="g-performance" min="0" max="10" value="${rec.performance ?? ''}" placeholder="/10"></td>
+      <td>${tasmeeCell}</td>
+      <td><input type="number" class="g-wagib" min="0" max="${sessMax.wagib}" value="${toDisplay(rec.wagib, 20, sessMax.wagib)}" placeholder="/${sessMax.wagib}"></td>
+      <td><input type="number" class="g-exam" min="0" max="${sessMax.exam}" value="${toDisplay(rec.exam, 10, sessMax.exam)}" placeholder="/${sessMax.exam}"></td>
+      <td><input type="number" class="g-discipline" min="0" max="10" value="${rec.discipline ?? 10}" placeholder="/10"></td>
+      <td><input type="number" class="g-performance" min="0" max="10" value="${rec.performance ?? 10}" placeholder="/10"></td>
     </tr>`;
   }).join('');
   wrap.innerHTML = `<table>
     <thead><tr>
       <th>رقم الحصة</th><th>اسم الطالب</th><th>الحضور</th>
-      <th>التسميع /20</th><th>الواجب /20</th><th>امتحان الحصة /10</th>
+      <th>التسميع /${sessMax.tasmee}</th><th>الواجب /${sessMax.wagib}</th><th>امتحان الحصة /${sessMax.exam}</th>
       <th>الانضباط /10</th><th>الأداء الصفي /10</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
   attachGradesAutosave();
 }
+function getNoTasmee(groupId, session){
+  if(!groupId || !session) return false;
+  const key = groupId + '_' + session;
+  return !!(DATA.sessionNoTasmee && DATA.sessionNoTasmee[key]);
+}
+function toggleNoTasmee(){
+  const groupId = document.getElementById('gradeGroupSelect').value;
+  const session = Number(document.getElementById('sessionSelect').value);
+  if(!groupId || !session){ document.getElementById('noTasmeeToggle').checked = false; return; }
+  const checked = document.getElementById('noTasmeeToggle').checked;
+  const key = groupId + '_' + session;
+  if(!DATA.sessionNoTasmee) DATA.sessionNoTasmee = {};
+  if(checked){
+    DATA.sessionNoTasmee[key] = true;
+    DATA.grades.forEach(g=>{ if(g.groupId===groupId && g.session===session) g.tasmee = null; });
+  } else {
+    delete DATA.sessionNoTasmee[key];
+  }
+  saveData(true);
+  renderGradesTable();
+}
+/* If an entered grade exceeds the field's max, assume it was recorded on a
+   larger scale (e.g. a worksheet out of 40 for a 20-point field) and scale it
+   down proportionally rather than just capping it: 39 on a 20-max field
+   becomes 19.5 (39 / ceil(39/20) = 39/2), 40 becomes 20, etc. */
+function proportionalClamp(v, max){
+  if(v < 0) return 0;
+  if(v <= max) return v;
+  const k = Math.ceil(v/max);
+  return Math.round((v/k)*10)/10;
+}
 function collectGradesFromTable(){
   const groupId = document.getElementById('gradeGroupSelect').value;
   const session = Number(document.getElementById('sessionSelect').value);
   if(!groupId) return;
+  const sessMax = getSessionMax(groupId, session);
+  const noTasmee = getNoTasmee(groupId, session);
+  // Clamp the raw entry against THIS session's declared max, then convert it
+  // onto the app's standard scale (20/20/10) so totals, levels, the
+  // leaderboard, certificates, and the parent portal all stay consistent —
+  // regardless of what this particular session's assignment was actually out of.
+  const clampAndScale = (v, customMax, standardMax) => {
+    v = Number(v); if(isNaN(v) || v==='') return null;
+    const raw = proportionalClamp(v, customMax);
+    if(customMax === standardMax) return raw;
+    return Math.round((raw/customMax)*standardMax*10)/10;
+  };
   document.querySelectorAll('#gradesTableWrap tbody tr').forEach(tr=>{
     const studentId = tr.dataset.student;
-    const clamp = (v, max) => { v = Number(v); if(isNaN(v) || v==='') return null; return Math.max(0, Math.min(max, v)); };
+    const clamp10 = (v) => { v = Number(v); if(isNaN(v) || v==='') return null; return proportionalClamp(v, 10); };
     const rec = {
       attendance: tr.querySelector('.g-attendance').value,
-      tasmee: clamp(tr.querySelector('.g-tasmee').value, 20),
-      wagib: clamp(tr.querySelector('.g-wagib').value, 20),
-      exam: clamp(tr.querySelector('.g-exam').value, 10),
-      discipline: clamp(tr.querySelector('.g-discipline').value, 10),
-      performance: clamp(tr.querySelector('.g-performance').value, 10),
+      tasmee: noTasmee ? null : clampAndScale(tr.querySelector('.g-tasmee').value, sessMax.tasmee, 20),
+      wagib: clampAndScale(tr.querySelector('.g-wagib').value, sessMax.wagib, 20),
+      exam: clampAndScale(tr.querySelector('.g-exam').value, sessMax.exam, 10),
+      discipline: clamp10(tr.querySelector('.g-discipline').value),
+      performance: clamp10(tr.querySelector('.g-performance').value),
     };
     const existingIdx = DATA.grades.findIndex(g=>g.groupId===groupId && g.session===session && g.studentId===studentId);
     if(existingIdx>-1){
@@ -1657,10 +1882,28 @@ function attachGradesAutosave(){
   if(gradesAutosaveAttached) return;
   gradesAutosaveAttached = true;
   const wrap = document.getElementById('gradesTableWrap');
-  wrap.addEventListener('input', ()=>{
+  const gradeFieldSelector = '.g-tasmee, .g-wagib, .g-exam, .g-discipline, .g-performance';
+  const applyClampTo = (t)=>{
+    if(!t || !t.matches || !t.matches(gradeFieldSelector) || t.value==='') return;
+    const max = Number(t.getAttribute('max'));
+    const v = Number(t.value);
+    if(!isNaN(v)){
+      const adjusted = proportionalClamp(v, max);
+      if(adjusted !== v) t.value = adjusted;
+    }
+  };
+  wrap.addEventListener('input', (e)=>{
+    const t = e.target;
     clearTimeout(gradesAutosaveTimer);
-    gradesAutosaveTimer = setTimeout(()=>{ collectGradesFromTable(); saveData(); }, 500);
+    gradesAutosaveTimer = setTimeout(()=>{
+      applyClampTo(t);
+      collectGradesFromTable();
+      saveData();
+    }, 500);
   });
+  wrap.addEventListener('blur', (e)=>{
+    applyClampTo(e.target);
+  }, true);
   wrap.addEventListener('change', (e)=>{
     if(e.target.classList.contains('g-attendance')){ collectGradesFromTable(); saveData(); }
   });
@@ -2614,6 +2857,7 @@ function renderPvLinkTab(){
   const portalLink = location.origin + location.pathname + '#portal';
   document.getElementById('portalLinkBox').textContent = portalLink;
   document.getElementById('publishAllStatus').textContent = '';
+  document.getElementById('publishNotifyWrap').innerHTML = '';
   if(ensureStudentCodes(DATA)) saveData(true);
   const stageSel = document.getElementById('publishStageSelect');
   fillStageOptions(stageSel, true);
@@ -2745,6 +2989,7 @@ async function publishAllStudents(){
   statusEl.textContent = '⏳ جاري النشر...';
   let successCount = 0;
   const failed = [];
+  const succeeded = [];
   let firstErrorDetail = '';
   for(const s of targets){
     try{
@@ -2752,6 +2997,7 @@ async function publishAllStudents(){
       const payload = sanitizeForFirestore(buildStudentPayload(s.id));
       await firebase.firestore().collection('students').doc(s.code).set(payload);
       successCount++;
+      succeeded.push(s);
     }catch(err){
       failed.push(`${s.name} (${err.code || 'خطأ'})`);
       if(!firstErrorDetail) firstErrorDetail = err.message || String(err);
@@ -2766,6 +3012,58 @@ async function publishAllStudents(){
     statusEl.style.color = '#C88835';
   }
   btn.disabled = false;
+
+  const notifyWrap = document.getElementById('publishNotifyWrap');
+  if(succeeded.length>0){
+    showPublishNotifyList();
+  } else {
+    notifyWrap.innerHTML = '';
+  }
+}
+function showPublishNotifyList(){
+  const notifyWrap = document.getElementById('publishNotifyWrap');
+  const portalLink = location.origin + location.pathname + '#portal';
+  const msg = `مرحبًا، تم تحديث الدرجات على بوابة متابعة أولياء الأمور. يمكنكم مراجعتها من نفس الرابط اللي معاكم:\n${portalLink}\n\n(كل ولي أمر يدخل باسم ابنه والكود الخاص به)`;
+  notifyWrap.innerHTML = `
+    <div style="font-size:12.5px;color:#7b887f;margin:10px 0;">رسالة واحدة تبعتها لجروب أولياء الأمور اللي معاك على واتساب — من غير ما تبعت لكل طالب لوحده.</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a class="btn btn-wa" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">📲 إرسال تنبيه (اختر الجروب)</a>
+      <button class="btn btn-outline" onclick="copyPublishNotifyMsg()">📋 نسخ نص الرسالة</button>
+    </div>
+  `;
+  window.lastNotifyMsg = msg;
+}
+function copyPublishNotifyMsg(){
+  const msg = window.lastNotifyMsg || '';
+  if(!msg) return;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(msg).then(()=>{ showToast('✓ تم نسخ الرسالة'); }).catch(()=>{ alert(msg); });
+  } else {
+    alert(msg);
+  }
+}
+function downloadParentContactsVCF(){
+  const stageId = document.getElementById('publishStageSelect').value;
+  const groupId = document.getElementById('publishGroupSelect').value;
+  let targets = DATA.students;
+  if(groupId) targets = targets.filter(s=>s.groupId===groupId);
+  else if(stageId) targets = targets.filter(s=>s.stageId===stageId);
+  const withPhone = targets.filter(s=>s.parentPhone);
+  if(withPhone.length===0){ alert('لا يوجد أرقام هواتف لأولياء الأمور لهذا الاختيار.'); return; }
+
+  const vcfBody = withPhone.map(s=>{
+    const phone = normalizePhone(s.parentPhone);
+    return `BEGIN:VCARD\r\nVERSION:3.0\r\nFN:ولي أمر ${s.name}\r\nTEL;TYPE=CELL:+${phone}\r\nEND:VCARD`;
+  }).join('\r\n');
+
+  const blob = new Blob([vcfBody], { type: 'text/vcard' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'اولياء_الامور.vcf';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  showToast(`✓ تم تحميل ${withPhone.length} جهة اتصال`);
 }
 
 /* ---- Snapshot (offline, self-contained) parent link — kept as a fallback option ---- */
