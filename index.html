@@ -1596,12 +1596,12 @@ function renderLeaderboard(){
     const absences = records.filter(r=>r.attendance==='غائب').length;
     return { student:s, total, absences, sessionsRecorded:records.length };
   });
-  // Students with any absence in this month are excluded from the ranking entirely
-  const ranked = all.filter(r=>r.absences===0 && r.sessionsRecorded>0).sort((a,b)=>b.total-a.total);
+  // Students with any absence in this month, or whose level isn't "ممتاز", are excluded from the ranking
+  const ranked = all.filter(r=>r.absences===0 && r.sessionsRecorded>0 && levelOf(r.total/blockSize).label==='ممتاز').sort((a,b)=>b.total-a.total);
   const excluded = all.filter(r=>r.absences>0);
 
   if(ranked.length===0){
-    wrap.innerHTML = `<div class="empty-state">كل طلاب المجموعة عندهم غياب في هذا الشهر، فمفيش ترتيب معلن حاليًا.</div>`;
+    wrap.innerHTML = `<div class="empty-state">لا يوجد طلاب بتقدير "ممتاز" في هذا الشهر حتى الآن.</div>`;
     return;
   }
 
@@ -1666,10 +1666,10 @@ function renderSessionTop(){
   const results = students.map(s=>{
     const rec = DATA.grades.find(g=>g.groupId===groupId && g.studentId===s.id && g.session===session);
     return { student:s, rec, total: rec ? totalOf(rec) : null, present: rec ? rec.attendance!=='غائب' : null };
-  }).filter(r=>r.rec && r.present); // exclude students absent or with no record for this session
+  }).filter(r=>r.rec && r.present && levelOf(r.total).label==='ممتاز'); // only "ممتاز" students, same rule as the monthly ranking
 
   if(results.length===0){
-    wrap.innerHTML = `<div class="empty-state">لا توجد درجات حاضرة مسجلة لهذه الحصة بعد.</div>`;
+    wrap.innerHTML = `<div class="empty-state">لا يوجد طلاب بتقدير "ممتاز" في هذه الحصة حتى الآن.</div>`;
     return;
   }
   results.sort((a,b)=>b.total-a.total);
