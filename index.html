@@ -663,6 +663,12 @@
 
       <div style="border-top:1px dashed var(--paper-line); margin:16px 0;"></div>
 
+      <div style="font-size:12px; font-weight:700; color:var(--accent-contact); margin-bottom:6px;">بيان النشر</div>
+      <div style="font-size:11.5px; color:#8b988f; margin-bottom:10px;">آخر مرة اتنشرت فيها بيانات كل مجموعة على بوابة أولياء الأمور، وهل فيه حصص جديدة لسه ما اتنشرتش.</div>
+      <div id="publishStatusWrap"></div>
+
+      <div style="border-top:1px dashed var(--paper-line); margin:16px 0;"></div>
+
       <div style="font-size:12px; font-weight:700; color:var(--accent-contact); margin-bottom:6px;">تنبيه أولياء الأمور بسهولة (مرة واحدة بس)</div>
       <div style="font-size:11.5px; color:#8b988f; margin-bottom:10px;">حمّل جهات اتصال أولياء الأمور (حسب الصف/المجموعة المختارة فوق) وأضفهم لجهات جهازك بضغطة واحدة، وبعدين اعمل جروب واتساب أو قائمة بث بيهم مرة واحدة. من بعدها، أي تحديث تبعته هيوصل الكل برسالة واحدة بدل ما تبعت لكل طالب لوحده.</div>
       <button class="btn btn-outline" onclick="downloadParentContactsVCF()">⬇ تحميل جهات اتصال أولياء الأمور</button>
@@ -833,11 +839,12 @@ function loadData(){
       if(typeof parsed.teacherName !== 'string') parsed.teacherName = '';
       if(typeof parsed.subject !== 'string') parsed.subject = '';
       if(!Array.isArray(parsed.students)) parsed.students = [];
+      if(!parsed.publishLog || typeof parsed.publishLog !== 'object') parsed.publishLog = {};
       ensureStudentCodes(parsed);
       return parsed;
     }
   }catch(e){}
-  return { currentStage: STAGES[0].id, academicYear: defaultAcademicYear(), teacherName:'', subject:'', groups: [], students: [], grades: [] };
+  return { currentStage: STAGES[0].id, academicYear: defaultAcademicYear(), teacherName:'', subject:'', groups: [], students: [], grades: [], publishLog: {} };
 }
 function saveData(silent){
   localStorage.setItem(STORE_KEY, JSON.stringify(DATA));
@@ -2879,6 +2886,47 @@ function renderPvLinkTab(){
   stageSel.value = '';
   fillPublishGroups();
   updateFbStatusNote();
+  renderPublishStatus();
+}
+function renderPublishStatus(){
+  const wrap = document.getElementById('publishStatusWrap');
+  if(!wrap) return;
+  const groupsWithStudents = DATA.groups.filter(g=>studentsByGroup(g.id).length>0);
+  if(groupsWithStudents.length===0){
+    wrap.innerHTML = `<div class="empty-state">لا توجد مجموعات بها طلاب بعد.</div>`;
+    return;
+  }
+  const rows = groupsWithStudents.map(g=>{
+    const students = studentsByGroup(g.id);
+    const total = students.length;
+    const published = students.filter(s=>DATA.publishLog && DATA.publishLog[s.id]);
+    const publishedCount = published.length;
+    let lastTime = null;
+    published.forEach(s=>{
+      const t = DATA.publishLog[s.id].publishedAt;
+      if(!lastTime || t>lastTime) lastTime = t;
+    });
+    const currentMaxSession = sessionsForGroup(g.id).length ? Math.max(...sessionsForGroup(g.id)) : 0;
+    let stale = false;
+    if(publishedCount>0){
+      const minPublishedSession = Math.min(...published.map(s=>DATA.publishLog[s.id].maxSession||0));
+      if(currentMaxSession > minPublishedSession) stale = true;
+    }
+    const dateStr = lastTime ? new Date(lastTime).toLocaleString('ar-EG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : null;
+    let badge;
+    if(publishedCount===0) badge = `<span class="pill pill-absent">لم يُنشر بعد</span>`;
+    else if(publishedCount<total) badge = `<span class="pill pill-absent">⚠️ ${total-publishedCount} طالب غير منشور</span>`;
+    else if(stale) badge = `<span class="pill pill-absent">⚠️ يوجد حصص جديدة غير منشورة</span>`;
+    else badge = `<span class="pill pill-present">✓ محدث بالكامل</span>`;
+    return `<div class="student-card">
+      <div class="student-info">
+        <b>${g.name}</b>
+        <div class="meta">${stageName(g.stageId)} · ${publishedCount} من ${total} طالب منشورين${dateStr ? ' · آخر نشر: '+dateStr : ''}${currentMaxSession ? ' · آخر حصة مسجلة: '+currentMaxSession : ''}</div>
+      </div>
+      <div class="student-actions">${badge}</div>
+    </div>`;
+  }).join('');
+  wrap.innerHTML = rows;
 }
 function fillPublishGroups(){
   const stageId = document.getElementById('publishStageSelect').value;
@@ -3013,11 +3061,15 @@ async function publishAllStudents(){
       await firebase.firestore().collection('students').doc(s.code).set(payload);
       successCount++;
       succeeded.push(s);
+      const maxSession = payload.r && payload.r.length ? Math.max(...payload.r.map(r=>r.s)) : 0;
+      if(!DATA.publishLog) DATA.publishLog = {};
+      DATA.publishLog[s.id] = { publishedAt: Date.now(), maxSession, groupId: s.groupId, stageId: s.stageId };
     }catch(err){
       failed.push(`${s.name} (${err.code || 'خطأ'})`);
       if(!firstErrorDetail) firstErrorDetail = err.message || String(err);
     }
   }
+  saveData(true);
   if(failed.length===0){
     statusEl.textContent = `✓ تم نشر تحديثات ${successCount} طالب بنجاح`;
     statusEl.style.color = '#1E7B3C';
@@ -3034,6 +3086,7 @@ async function publishAllStudents(){
   } else {
     notifyWrap.innerHTML = '';
   }
+  renderPublishStatus();
 }
 function showPublishNotifyList(){
   const notifyWrap = document.getElementById('publishNotifyWrap');
