@@ -339,6 +339,9 @@
   .rank-info b{ font-family:'Cairo',sans-serif; font-size:15px; }
   .rank-info .meta{ font-size:12px; color:#7b887f; margin-top:2px; }
   .rank-score{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:16px; color:var(--chalk-green-dark); }
+  .rank-card.progress-card{ background:linear-gradient(90deg,#EFEBFC,#FDFCFA); border-color:var(--accent-students); }
+  .rank-card.progress-card .rank-num{ background:var(--accent-students); color:#fff; }
+  .progress-delta{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:15px; color:#1E7B3C; }
 
   @media (max-width:640px){
     .field-row{ flex-direction:column; }
@@ -582,8 +585,10 @@
         </label>
       </div>
       <div id="gradesTableWrap"></div>
-      <div style="margin-top:14px; display:flex; gap:10px;">
+      <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
         <button class="btn btn-primary" onclick="saveGrades()">💾 حفظ درجات الحصة</button>
+        <button class="btn btn-teal" id="saveAndPublishBtn" onclick="saveAndPublishGroup()">📡 حفظ ونشر لبوابة أولياء الأمور</button>
+        <span id="saveAndPublishStatus" style="font-size:12.5px; color:#7b887f;"></span>
       </div>
     </div>
   </section>
@@ -608,6 +613,22 @@
         </div>
       </div>
       <div id="leaderboardWrap"></div>
+    </div>
+
+    <div class="card">
+      <h2>بطل التحدي والتقدم <span class="tag">MOST IMPROVED</span></h2>
+      <div style="font-size:13px; color:#7b887f; margin-bottom:14px;">تكريم مختلف عن "الأوائل" — مخصص للطلاب اللي بدأوا من مستوى ضعيف وقدروا يتحدوا نفسهم ويتحسنوا من حصة للي بعدها خلال نفس الشهر. الشروط: (١) بدأ الشهر بمستوى "مقبول" أو "دون المستوى". (٢) حضر كل حصص الشهر بدون أي غياب. (٣) درجاته اتحسنت من حصة لأخرى (مش بس آخر حصة كويسة بالصدفة). الترتيب حسب عدد مرات التحسن بين الحصص.</div>
+      <div class="field-row">
+        <div class="field">
+          <label>الصف الدراسي</label>
+          <select id="progStageSelect" onchange="fillProgGroups()"></select>
+        </div>
+        <div class="field">
+          <label>المجموعة</label>
+          <select id="progGroupSelect" onchange="renderProgressChampion()"></select>
+        </div>
+      </div>
+      <div id="progressChampionWrap"></div>
     </div>
 
     <div class="card">
@@ -1376,10 +1397,24 @@ function performMoveStudent(studentId, newGroupId){
   if(!student || !newGroupId || newGroupId===student.groupId) return false;
   const newGroup = DATA.groups.find(g=>g.id===newGroupId);
   if(!newGroup) return false;
+  const oldGroupId = student.groupId;
+
+  // Carry the student's grade history over to the new group so it isn't
+  // orphaned under the old groupId. If a session number already has a
+  // record for this student in the new group (rare), keep the new group's
+  // record and drop the old one rather than overwrite it silently.
+  DATA.grades = DATA.grades.filter(g=>{
+    if(g.studentId!==studentId || g.groupId!==oldGroupId) return true; // untouched
+    const collision = DATA.grades.some(o=>o.studentId===studentId && o.groupId===newGroupId && o.session===g.session);
+    if(collision) return false; // drop the old duplicate-session record
+    g.groupId = newGroupId;
+    return true;
+  });
+
   student.groupId = newGroupId;
   student.stageId = newGroup.stageId;
   saveData(true);
-  showToast(`✓ تم نقل ${student.name} إلى ${newGroup.name}`);
+  showToast(`✓ تم نقل ${student.name} إلى ${newGroup.name} مع كل درجاته`);
   return true;
 }
 function moveStudent(studentId){
@@ -1484,6 +1519,8 @@ function renderGradesTab(){
   fillStageOptions(stageSel, false);
   stageSel.value = DATA.currentStage;
   fillGroupsForGrades();
+  const statusEl = document.getElementById('saveAndPublishStatus');
+  if(statusEl) statusEl.textContent = '';
 }
 function fillGroupsForGrades(){
   const stageId = document.getElementById('gradeStageSelect').value;
@@ -1537,6 +1574,11 @@ function renderBestTab(){
   fillStageOptions(stageSel, false);
   stageSel.value = DATA.currentStage;
   fillBestGroups();
+
+  const progStageSel = document.getElementById('progStageSelect');
+  fillStageOptions(progStageSel, false);
+  progStageSel.value = DATA.currentStage;
+  fillProgGroups();
 
   const sessTopStageSel = document.getElementById('sessTopStageSelect');
   fillStageOptions(sessTopStageSel, false);
@@ -1641,6 +1683,69 @@ function renderLeaderboard(){
   }
 
   wrap.innerHTML = html;
+}
+
+function fillProgGroups(){
+  const stageId = document.getElementById('progStageSelect').value;
+  const sel = document.getElementById('progGroupSelect');
+  const groups = groupsByStage(stageId);
+  sel.innerHTML = groups.length
+    ? groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')
+    : `<option value="">لا توجد مجموعات</option>`;
+  renderProgressChampion();
+}
+function renderProgressChampion(){
+  const wrap = document.getElementById('progressChampionWrap');
+  const groupId = document.getElementById('progGroupSelect').value;
+  if(!groupId){
+    wrap.innerHTML = `<div class="empty-state">اختر مجموعة لعرض بطل التحدي والتقدم.</div>`;
+    return;
+  }
+  const blocks = getGroupCompleteBlocks(groupId);
+  if(blocks.length===0){
+    wrap.innerHTML = `<div class="empty-state">لازم شهر واحد مكتمل على الأقل لهذه المجموعة عشان نقدر نقيس التقدم.</div>`;
+    return;
+  }
+  const block = blocks[blocks.length-1];
+  const students = studentsByGroup(groupId);
+
+  const candidates = students.map(s=>{
+    const records = DATA.grades
+      .filter(g=>g.groupId===groupId && g.studentId===s.id && g.session>=block.start && g.session<=block.end)
+      .sort((a,b)=>a.session-b.session);
+    if(records.length < block.blockSize) return null; // needs every session of the month recorded
+    if(records.some(r=>r.attendance==='غائب')) return null; // no absences in this month
+    const totals = records.map(r=>totalOf(r));
+    const firstLevel = levelOf(totals[0]);
+    if(firstLevel.label!=='مقبول' && firstLevel.label!=='دون المستوى') return null;
+    let improvingSteps = 0;
+    for(let i=1;i<totals.length;i++){
+      if(totals[i] > totals[i-1]) improvingSteps++;
+    }
+    const totalGrowth = totals[totals.length-1] - totals[0];
+    if(improvingSteps===0) return null; // must show real session-to-session improvement, not just a lucky last session
+    return {
+      student:s, improvingSteps, totalSteps: totals.length-1, totalGrowth,
+      firstLevel, lastLevel: levelOf(totals[totals.length-1])
+    };
+  }).filter(Boolean).sort((a,b)=> b.improvingSteps - a.improvingSteps || b.totalGrowth - a.totalGrowth);
+
+  if(candidates.length===0){
+    wrap.innerHTML = `<div class="empty-state">لا يوجد طالب مؤهل حاليًا (محتاج طالب بدأ الشهر بمستوى "مقبول" أو "دون المستوى"، وسجّل تحسّنًا من حصة للي بعدها، بدون أي غياب في كل حصص الشهر).</div>`;
+    return;
+  }
+  const medalIcon = ['🥇','🥈','🥉'];
+  wrap.innerHTML = `<div style="font-size:12px; color:#7b887f; margin-bottom:10px;">الشهر ${block.blockIndex} (حصص ${block.start}-${block.end}) — تحسّن من حصة للي بعدها</div>` +
+    candidates.slice(0,3).map((c,i)=>`
+      <div class="rank-card progress-card">
+        <div class="rank-num">${medalIcon[i]||'🏅'}</div>
+        <div class="rank-info">
+          <b>${c.student.name}</b>
+          <div class="meta">تحسّن في ${c.improvingSteps} من ${c.totalSteps} انتقالات بين الحصص · من "${c.firstLevel.label}" إلى "${c.lastLevel.label}"</div>
+        </div>
+        <div class="progress-delta">+${c.totalGrowth.toFixed(1)}</div>
+      </div>
+    `).join('');
 }
 
 function fillSessTopGroups(){
@@ -1937,6 +2042,62 @@ function saveGrades(){
   const session = document.getElementById('sessionSelect').value;
   alert('تم حفظ درجات الحصة رقم ' + session + ' بنجاح ✅');
 }
+async function saveAndPublishGroup(){
+  const groupId = document.getElementById('gradeGroupSelect').value;
+  const statusEl = document.getElementById('saveAndPublishStatus');
+  const btn = document.getElementById('saveAndPublishBtn');
+  if(!groupId){ alert('اختر مجموعة أولًا'); return; }
+
+  collectGradesFromTable();
+  saveData(true);
+
+  btn.disabled = true;
+  statusEl.textContent = '⏳ جاري الفحص...';
+  statusEl.style.color = '#7b887f';
+  const ok = await window.fbReady;
+  if(!ok){
+    statusEl.textContent = '⚠️ تم الحفظ محليًا، لكن تعذر الاتصال بقاعدة البيانات للنشر. تأكد من الإنترنت وجرّب النشر لاحقًا من تبويب التواصل.';
+    statusEl.style.color = 'var(--red)';
+    btn.disabled = false;
+    return;
+  }
+  try{
+    await firebase.firestore().collection('students').doc('zzz_diag_test').set({ ts: Date.now() });
+  }catch(err){
+    statusEl.innerHTML = `⚠️ تم الحفظ محليًا، لكن فشل الاتصال بقاعدة البيانات — السبب: <span class="mono">${err.code || err.message}</span>`;
+    statusEl.style.color = 'var(--red)';
+    btn.disabled = false;
+    return;
+  }
+
+  if(ensureStudentCodes(DATA)) saveData(true);
+  const students = studentsByGroup(groupId);
+  statusEl.textContent = '⏳ جاري النشر...';
+  let successCount = 0;
+  const failed = [];
+  for(const s of students){
+    try{
+      if(!s.code) throw { code:'no-code' };
+      const payload = sanitizeForFirestore(buildStudentPayload(s.id));
+      await firebase.firestore().collection('students').doc(s.code).set(payload);
+      successCount++;
+      const maxSession = payload.r && payload.r.length ? Math.max(...payload.r.map(r=>r.s)) : 0;
+      if(!DATA.publishLog) DATA.publishLog = {};
+      DATA.publishLog[s.id] = { publishedAt: Date.now(), maxSession, groupId: s.groupId, stageId: s.stageId };
+    }catch(err){
+      failed.push(`${s.name} (${err.code || 'خطأ'})`);
+    }
+  }
+  saveData(true);
+  if(failed.length===0){
+    statusEl.textContent = `✓ تم الحفظ ونشر تحديثات ${successCount} طالب في هذه المجموعة بنجاح`;
+    statusEl.style.color = '#1E7B3C';
+  } else {
+    statusEl.innerHTML = `✓ تم الحفظ ونشر ${successCount} طالب — ⚠️ فشل نشر: ${failed.join('، ')}`;
+    statusEl.style.color = '#C88835';
+  }
+  btn.disabled = false;
+}
 
 /* ---------------- TAB 5: CONTACT ---------------- */
 function renderContactTab(){
@@ -1949,12 +2110,11 @@ function totalOf(rec){
   return vals.reduce((a,b)=>a+b,0);
 }
 function levelOf(total){
-  // Thresholds correspond to the 8-session block scale (out of 560):
-  // ممتاز 476-560، جيد جدًا 420-475.5، جيد 364-419.5، مقبول 280-363.5، دون المستوى أقل من 280
-  // (divided by 8 here since this function always receives a per-session value out of 70)
-  if(total>=59.5) return {label:'ممتاز', css:'level-ممتاز', color:'#1E7B3C'};
-  if(total>=52.5) return {label:'جيد جدًا', css:'level-جيدجدا', color:'#2E6F73'};
-  if(total>=45.5) return {label:'جيد', css:'level-جيد', color:'#C88835'};
+  // Thresholds on the per-session scale (out of 70):
+  // ممتاز 62.5-70، جيد جدًا 55-62.4، جيد 45-54.9، مقبول 35-44.9، دون المستوى أقل من 35
+  if(total>=62.5) return {label:'ممتاز', css:'level-ممتاز', color:'#1E7B3C'};
+  if(total>=55) return {label:'جيد جدًا', css:'level-جيدجدا', color:'#2E6F73'};
+  if(total>=45) return {label:'جيد', css:'level-جيد', color:'#C88835'};
   if(total>=35) return {label:'مقبول', css:'level-مقبول', color:'#B4622F'};
   return {label:'دون المستوى', css:'level-دونالمستوى', color:'#B4452F'};
 }
