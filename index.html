@@ -672,7 +672,7 @@
         </div>
         <div class="field">
           <label>المجموعة</label>
-          <select id="publishGroupSelect"></select>
+          <select id="publishGroupSelect" onchange="getLastSel('publish').groupId=this.value; saveData(true);"></select>
         </div>
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
@@ -861,15 +861,39 @@ function loadData(){
       if(typeof parsed.subject !== 'string') parsed.subject = '';
       if(!Array.isArray(parsed.students)) parsed.students = [];
       if(!parsed.publishLog || typeof parsed.publishLog !== 'object') parsed.publishLog = {};
+      if(!parsed.lastSelection || typeof parsed.lastSelection !== 'object') parsed.lastSelection = {};
       ensureStudentCodes(parsed);
       return parsed;
     }
   }catch(e){}
-  return { currentStage: STAGES[0].id, academicYear: defaultAcademicYear(), teacherName:'', subject:'', groups: [], students: [], grades: [], publishLog: {} };
+  return { currentStage: STAGES[0].id, academicYear: defaultAcademicYear(), teacherName:'', subject:'', groups: [], students: [], grades: [], publishLog: {}, lastSelection: {} };
 }
 function saveData(silent){
   localStorage.setItem(STORE_KEY, JSON.stringify(DATA));
   if(!silent) showToast('✓ تم الحفظ تلقائيًا');
+}
+/* Remember the last stage/group chosen in each tab's selectors, so switching
+   tabs and coming back keeps you where you were instead of resetting. */
+function getLastSel(key){
+  if(!DATA.lastSelection) DATA.lastSelection = {};
+  if(!DATA.lastSelection[key]) DATA.lastSelection[key] = {};
+  return DATA.lastSelection[key];
+}
+function rememberStage(key, stageId){
+  if(!stageId) return;
+  getLastSel(key).stageId = stageId;
+  saveData(true);
+}
+function rememberGroup(key, groupId){
+  getLastSel(key).groupId = groupId;
+  saveData(true);
+}
+function pickRememberedStage(key){
+  return getLastSel(key).stageId || DATA.currentStage;
+}
+function pickRememberedGroup(key, availableGroupIds){
+  const g = getLastSel(key).groupId;
+  return (g && availableGroupIds.includes(g)) ? g : null;
 }
 let toastTimer = null;
 function showToast(text){
@@ -997,12 +1021,13 @@ function setCurrentStage(id){ DATA.currentStage = id; saveData(); renderStageTab
 function renderGroupTab(){
   const sel = document.getElementById('groupStageSelect');
   fillStageOptions(sel, false);
-  sel.value = DATA.currentStage;
+  sel.value = pickRememberedStage('group');
   renderGroups();
 }
 let expandedGroupIds = new Set();
 function renderGroups(){
   const stageId = document.getElementById('groupStageSelect').value;
+  rememberStage('group', stageId);
   const list = document.getElementById('groupsList');
   const groups = groupsByStage(stageId);
   if(groups.length===0){
@@ -1258,31 +1283,40 @@ function renderStudentsTab(){
 
   const stuStage = document.getElementById('stuStageSelect');
   fillStageOptions(stuStage, false);
-  stuStage.value = DATA.currentStage;
+  stuStage.value = pickRememberedStage('stu');
   fillGroupsForStudentForm();
 
   const filterStage = document.getElementById('filterStageStudents');
   fillStageOptions(filterStage, true);
-  filterStage.value = '';
+  filterStage.value = getLastSel('stuFilter').stageId || '';
   fillFilterGroups();
 
   renderStudents();
 }
 function fillGroupsForStudentForm(){
   const stageId = document.getElementById('stuStageSelect').value;
+  rememberStage('stu', stageId);
   const sel = document.getElementById('stuGroupSelect');
   const groups = groupsByStage(stageId);
   sel.innerHTML = groups.length
     ? groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')
     : `<option value="">لا توجد مجموعات — أضف مجموعة أولًا</option>`;
+  const remembered = pickRememberedGroup('stu', groups.map(g=>g.id));
+  if(remembered) sel.value = remembered;
+  rememberGroup('stu', sel.value);
 }
 function fillFilterGroups(){
   const stageId = document.getElementById('filterStageStudents').value;
+  getLastSel('stuFilter').stageId = stageId;
   const sel = document.getElementById('filterGroupStudents');
   const groups = stageId ? groupsByStage(stageId) : DATA.groups;
   sel.innerHTML = `<option value="">كل المجموعات</option>` + groups.map(g=>`<option value="${g.id}">${g.name} — ${stageName(g.stageId)}</option>`).join('');
+  const remembered = getLastSel('stuFilter').groupId;
+  if(remembered && groups.some(g=>g.id===remembered)) sel.value = remembered;
+  saveData(true);
 }
 document.getElementById('filterStageStudents')?.addEventListener('change', ()=>{ fillFilterGroups(); renderStudents(); });
+document.getElementById('filterGroupStudents')?.addEventListener('change', ()=>{ getLastSel('stuFilter').groupId = document.getElementById('filterGroupStudents').value; saveData(true); });
 
 function addStudent(){
   const stageId = document.getElementById('stuStageSelect').value;
@@ -1517,18 +1551,21 @@ function promoteStudents(){
 function renderGradesTab(){
   const stageSel = document.getElementById('gradeStageSelect');
   fillStageOptions(stageSel, false);
-  stageSel.value = DATA.currentStage;
+  stageSel.value = pickRememberedStage('grade');
   fillGroupsForGrades();
   const statusEl = document.getElementById('saveAndPublishStatus');
   if(statusEl) statusEl.textContent = '';
 }
 function fillGroupsForGrades(){
   const stageId = document.getElementById('gradeStageSelect').value;
+  rememberStage('grade', stageId);
   const sel = document.getElementById('gradeGroupSelect');
   const groups = groupsByStage(stageId);
   sel.innerHTML = groups.length
     ? groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')
     : `<option value="">لا توجد مجموعات</option>`;
+  const remembered = pickRememberedGroup('grade', groups.map(g=>g.id));
+  if(remembered) sel.value = remembered;
   loadGradeSessions();
 }
 function sessionsForGroup(groupId){
@@ -1537,6 +1574,7 @@ function sessionsForGroup(groupId){
 }
 function loadGradeSessions(){
   const groupId = document.getElementById('gradeGroupSelect').value;
+  rememberGroup('grade', groupId);
   const sel = document.getElementById('sessionSelect');
   let sessions = sessionsForGroup(groupId);
   if(sessions.length===0) sessions = [1];
@@ -1572,26 +1610,29 @@ function deleteSession(){
 function renderBestTab(){
   const stageSel = document.getElementById('bestStageSelect');
   fillStageOptions(stageSel, false);
-  stageSel.value = DATA.currentStage;
+  stageSel.value = pickRememberedStage('best');
   fillBestGroups();
 
   const progStageSel = document.getElementById('progStageSelect');
   fillStageOptions(progStageSel, false);
-  progStageSel.value = DATA.currentStage;
+  progStageSel.value = pickRememberedStage('prog');
   fillProgGroups();
 
   const sessTopStageSel = document.getElementById('sessTopStageSelect');
   fillStageOptions(sessTopStageSel, false);
-  sessTopStageSel.value = DATA.currentStage;
+  sessTopStageSel.value = pickRememberedStage('sessTop');
   fillSessTopGroups();
 }
 function fillBestGroups(){
   const stageId = document.getElementById('bestStageSelect').value;
+  rememberStage('best', stageId);
   const sel = document.getElementById('bestGroupSelect');
   const groups = groupsByStage(stageId);
   sel.innerHTML = groups.length
     ? groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')
     : `<option value="">لا توجد مجموعات</option>`;
+  const remembered = pickRememberedGroup('best', groups.map(g=>g.id));
+  if(remembered) sel.value = remembered;
   fillBestBlocks();
 }
 /* Secondary stages (s1/s2/s3) treat every 4 sessions as a "month"; prep and
@@ -1614,6 +1655,7 @@ function getGroupCompleteBlocks(groupId){
 }
 function fillBestBlocks(){
   const groupId = document.getElementById('bestGroupSelect').value;
+  rememberGroup('best', groupId);
   const sel = document.getElementById('bestBlockSelect');
   const blocks = groupId ? getGroupCompleteBlocks(groupId) : [];
   sel.innerHTML = blocks.length
@@ -1621,6 +1663,18 @@ function fillBestBlocks(){
     : '';
   if(blocks.length>0) sel.value = blocks[blocks.length-1].blockIndex;
   renderLeaderboard();
+}
+/* Assigns competition-style ranks (ties share the same rank, the next
+   distinct value skips accordingly — e.g. 1, 1, 3, 4) instead of plain
+   array position. keyFn must return a value that's identical for ties. */
+function assignRanks(sortedDescArr, keyFn){
+  let rank = 0, prevKey;
+  return sortedDescArr.map((item, idx) => {
+    const key = keyFn(item);
+    if(idx===0 || key !== prevKey) rank = idx + 1;
+    prevKey = key;
+    return { ...item, rank };
+  });
 }
 function renderLeaderboard(){
   const wrap = document.getElementById('leaderboardWrap');
@@ -1651,7 +1705,8 @@ function renderLeaderboard(){
     return { student:s, total, absences, sessionsRecorded:records.length };
   });
   // Students with any absence in this month, or whose level isn't "ممتاز", are excluded from the ranking
-  const ranked = all.filter(r=>r.absences===0 && r.sessionsRecorded>0 && levelOf(r.total/blockSize).label==='ممتاز').sort((a,b)=>b.total-a.total);
+  const rankedRaw = all.filter(r=>r.absences===0 && r.sessionsRecorded>0 && levelOf(r.total/blockSize).label==='ممتاز').sort((a,b)=>b.total-a.total);
+  const ranked = assignRanks(rankedRaw, r=>r.total);
   const excluded = all.filter(r=>r.absences>0);
 
   if(ranked.length===0){
@@ -1661,11 +1716,11 @@ function renderLeaderboard(){
 
   const medalClass = ['top1','top2','top3'];
   const medalIcon = ['🥇','🥈','🥉'];
-  let html = ranked.map((r,i)=>{
-    const cls = i<3 ? medalClass[i] : '';
-    const icon = i<3 ? medalIcon[i] : (i+1);
+  let html = ranked.map((r)=>{
+    const cls = r.rank<=3 ? medalClass[r.rank-1] : '';
+    const icon = r.rank<=3 ? medalIcon[r.rank-1] : r.rank;
     const avgLevel = levelOf(r.total/blockSize);
-    const certEligible = i<2 && avgLevel.label==='ممتاز';
+    const certEligible = r.rank<=2 && avgLevel.label==='ممتاز';
     return `<div class="rank-card ${cls}">
       <div class="rank-num">${icon}</div>
       <div class="rank-info">
@@ -1687,16 +1742,21 @@ function renderLeaderboard(){
 
 function fillProgGroups(){
   const stageId = document.getElementById('progStageSelect').value;
+  rememberStage('prog', stageId);
   const sel = document.getElementById('progGroupSelect');
   const groups = groupsByStage(stageId);
   sel.innerHTML = groups.length
     ? groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')
     : `<option value="">لا توجد مجموعات</option>`;
+  const remembered = pickRememberedGroup('prog', groups.map(g=>g.id));
+  if(remembered) sel.value = remembered;
+  rememberGroup('prog', sel.value);
   renderProgressChampion();
 }
 function renderProgressChampion(){
   const wrap = document.getElementById('progressChampionWrap');
   const groupId = document.getElementById('progGroupSelect').value;
+  rememberGroup('prog', groupId);
   if(!groupId){
     wrap.innerHTML = `<div class="empty-state">اختر مجموعة لعرض بطل التحدي والتقدم.</div>`;
     return;
@@ -1734,11 +1794,13 @@ function renderProgressChampion(){
     wrap.innerHTML = `<div class="empty-state">لا يوجد طالب مؤهل حاليًا (محتاج طالب بدأ الشهر بمستوى "مقبول" أو "دون المستوى"، وسجّل تحسّنًا من حصة للي بعدها، بدون أي غياب في كل حصص الشهر).</div>`;
     return;
   }
+  const rankedAll = assignRanks(candidates, c=>`${c.improvingSteps}_${c.totalGrowth}`);
+  const top3 = rankedAll.filter(c=>c.rank<=3);
   const medalIcon = ['🥇','🥈','🥉'];
   wrap.innerHTML = `<div style="font-size:12px; color:#7b887f; margin-bottom:10px;">الشهر ${block.blockIndex} (حصص ${block.start}-${block.end}) — تحسّن من حصة للي بعدها</div>` +
-    candidates.slice(0,3).map((c,i)=>`
+    top3.map((c)=>`
       <div class="rank-card progress-card">
-        <div class="rank-num">${medalIcon[i]||'🏅'}</div>
+        <div class="rank-num">${c.rank<=3 ? (medalIcon[c.rank-1]||'🏅') : c.rank}</div>
         <div class="rank-info">
           <b>${c.student.name}</b>
           <div class="meta">تحسّن في ${c.improvingSteps} من ${c.totalSteps} انتقالات بين الحصص · من "${c.firstLevel.label}" إلى "${c.lastLevel.label}"</div>
@@ -1750,15 +1812,19 @@ function renderProgressChampion(){
 
 function fillSessTopGroups(){
   const stageId = document.getElementById('sessTopStageSelect').value;
+  rememberStage('sessTop', stageId);
   const sel = document.getElementById('sessTopGroupSelect');
   const groups = groupsByStage(stageId);
   sel.innerHTML = groups.length
     ? groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')
     : `<option value="">لا توجد مجموعات</option>`;
+  const remembered = pickRememberedGroup('sessTop', groups.map(g=>g.id));
+  if(remembered) sel.value = remembered;
   fillSessTopSessions();
 }
 function fillSessTopSessions(){
   const groupId = document.getElementById('sessTopGroupSelect').value;
+  rememberGroup('sessTop', groupId);
   const sel = document.getElementById('sessTopSessionSelect');
   const sessions = sessionsForGroup(groupId);
   sel.innerHTML = sessions.length
@@ -1790,13 +1856,14 @@ function renderSessionTop(){
     return;
   }
   results.sort((a,b)=>b.total-a.total);
-  const top5 = results.slice(0,5);
+  const rankedAll = assignRanks(results, r=>r.total);
+  const top5 = rankedAll.filter(r=>r.rank<=5);
 
   const medalClass = ['top1','top2','top3'];
   const medalIcon = ['🥇','🥈','🥉'];
-  wrap.innerHTML = top5.map((r,i)=>{
-    const cls = i<3 ? medalClass[i] : '';
-    const icon = i<3 ? medalIcon[i] : (i+1);
+  wrap.innerHTML = top5.map((r)=>{
+    const cls = r.rank<=3 ? medalClass[r.rank-1] : '';
+    const icon = r.rank<=3 ? medalIcon[r.rank-1] : r.rank;
     const level = levelOf(r.total);
     return `<div class="rank-card ${cls}">
       <div class="rank-num">${icon}</div>
@@ -2666,20 +2733,24 @@ function sendWhatsApp(){
 function renderBulkContactTab(){
   const stageSel = document.getElementById('bulkStageSelect');
   fillStageOptions(stageSel, false);
-  stageSel.value = DATA.currentStage;
+  stageSel.value = pickRememberedStage('bulk');
   fillBulkGroups();
 }
 function fillBulkGroups(){
   const stageId = document.getElementById('bulkStageSelect').value;
+  rememberStage('bulk', stageId);
   const sel = document.getElementById('bulkGroupSelect');
   const groups = groupsByStage(stageId);
   sel.innerHTML = groups.length
     ? groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')
     : `<option value="">لا توجد مجموعات</option>`;
+  const remembered = pickRememberedGroup('bulk', groups.map(g=>g.id));
+  if(remembered) sel.value = remembered;
   fillBulkSessions();
 }
 function fillBulkSessions(){
   const groupId = document.getElementById('bulkGroupSelect').value;
+  rememberGroup('bulk', groupId);
   const sel = document.getElementById('bulkSessionSelect');
   const sessions = sessionsForGroup(groupId);
   sel.innerHTML = sessions.length
@@ -2743,7 +2814,7 @@ function prepareBulkMessages(){
 function renderAnnTab(){
   const stageSel = document.getElementById('annStageSelect');
   fillStageOptions(stageSel, false);
-  stageSel.value = DATA.currentStage;
+  stageSel.value = pickRememberedStage('ann');
   fillAnnGroups();
 }
 let annAttachedFile = null;
@@ -2770,11 +2841,15 @@ function removeAnnFile(){
 }
 function fillAnnGroups(){
   const stageId = document.getElementById('annStageSelect').value;
+  rememberStage('ann', stageId);
   const sel = document.getElementById('annGroupSelect');
   const groups = groupsByStage(stageId);
   sel.innerHTML = groups.length
     ? groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')
     : `<option value="">لا توجد مجموعات</option>`;
+  const remembered = pickRememberedGroup('ann', groups.map(g=>g.id));
+  if(remembered) sel.value = remembered;
+  rememberGroup('ann', sel.value);
   document.getElementById('annList').innerHTML = '';
 }
 function getAnnContacts(groupId, recipients){
@@ -3043,7 +3118,7 @@ function renderPvLinkTab(){
   if(ensureStudentCodes(DATA)) saveData(true);
   const stageSel = document.getElementById('publishStageSelect');
   fillStageOptions(stageSel, true);
-  stageSel.value = '';
+  stageSel.value = getLastSel('publish').stageId || '';
   fillPublishGroups();
   updateFbStatusNote();
   renderPublishStatus();
@@ -3056,7 +3131,7 @@ function renderPublishStatus(){
     wrap.innerHTML = `<div class="empty-state">لا توجد مجموعات بها طلاب بعد.</div>`;
     return;
   }
-  const rows = groupsWithStudents.map(g=>{
+  const items = groupsWithStudents.map(g=>{
     const students = studentsByGroup(g.id);
     const total = students.length;
     const published = students.filter(s=>DATA.publishLog && DATA.publishLog[s.id]);
@@ -3073,27 +3148,48 @@ function renderPublishStatus(){
       if(currentMaxSession > minPublishedSession) stale = true;
     }
     const dateStr = lastTime ? new Date(lastTime).toLocaleString('ar-EG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : null;
-    let badge;
-    if(publishedCount===0) badge = `<span class="pill pill-absent">لم يُنشر بعد</span>`;
-    else if(publishedCount<total) badge = `<span class="pill pill-absent">⚠️ ${total-publishedCount} طالب غير منشور</span>`;
-    else if(stale) badge = `<span class="pill pill-absent">⚠️ يوجد حصص جديدة غير منشورة</span>`;
-    else badge = `<span class="pill pill-present">✓ محدث بالكامل</span>`;
-    return `<div class="student-card">
-      <div class="student-info">
-        <b>${g.name}</b>
-        <div class="meta">${stageName(g.stageId)} · ${publishedCount} من ${total} طالب منشورين${dateStr ? ' · آخر نشر: '+dateStr : ''}${currentMaxSession ? ' · آخر حصة مسجلة: '+currentMaxSession : ''}</div>
-      </div>
-      <div class="student-actions">${badge}</div>
-    </div>`;
-  }).join('');
-  wrap.innerHTML = rows;
+    const upToDate = publishedCount===total && total>0 && !stale;
+    let badge, detail;
+    if(publishedCount===0){ badge = `<span class="pill pill-absent">لم يُنشر</span>`; detail=''; }
+    else if(publishedCount<total){ badge = `<span class="pill pill-absent">⚠️ ${total-publishedCount} غير منشور</span>`; detail = dateStr?` · ${dateStr}`:''; }
+    else if(stale){ badge = `<span class="pill pill-absent">⚠️ حصص جديدة</span>`; detail = dateStr?` · ${dateStr}`:''; }
+    else { badge = `<span class="pill pill-present">✓ محدث</span>`; detail = dateStr?` · ${dateStr}`:''; }
+    return { upToDate, html: `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid var(--paper-line); font-size:12.5px;">
+        <span><b>${g.name}</b><span style="color:#8b988f;"> — ${stageName(g.stageId)}${detail}</span></span>
+        ${badge}
+      </div>` };
+  });
+  const upToDateCount = items.filter(x=>x.upToDate).length;
+  const needsCount = items.length - upToDateCount;
+  const summary = needsCount===0
+    ? `✓ كل المجموعات (${items.length}) محدثة بالكامل`
+    : `⚠️ ${needsCount} من ${items.length} مجموعة محتاجة نشر`;
+  wrap.innerHTML = `
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+      <span style="font-size:13px; font-weight:600; color:${needsCount===0?'#1E7B3C':'#C88835'};">${summary}</span>
+      <button class="btn btn-outline btn-sm" onclick="togglePublishStatusDetails()" id="publishStatusToggleBtn">عرض التفاصيل ▾</button>
+    </div>
+    <div id="publishStatusDetails" style="display:none; margin-top:8px;">${items.map(x=>x.html).join('')}</div>
+  `;
+}
+function togglePublishStatusDetails(){
+  const details = document.getElementById('publishStatusDetails');
+  const btn = document.getElementById('publishStatusToggleBtn');
+  const open = details.style.display!=='none';
+  details.style.display = open ? 'none' : 'block';
+  btn.textContent = open ? 'عرض التفاصيل ▾' : 'إخفاء التفاصيل ▴';
 }
 function fillPublishGroups(){
   const stageId = document.getElementById('publishStageSelect').value;
+  getLastSel('publish').stageId = stageId;
   const sel = document.getElementById('publishGroupSelect');
   const groups = stageId ? groupsByStage(stageId) : DATA.groups;
   sel.innerHTML = `<option value="">كل المجموعات</option>` +
     groups.map(g=>`<option value="${g.id}">${g.name}${stageId?'':' — '+stageName(g.stageId)}</option>`).join('');
+  const remembered = getLastSel('publish').groupId;
+  if(remembered && groups.some(g=>g.id===remembered)) sel.value = remembered;
+  saveData(true);
 }
 function updateFbStatusNote(){
   const statusEl = document.getElementById('pvFbStatus');
