@@ -596,8 +596,26 @@
   <!-- TAB: BEST (LEADERBOARD) -->
   <section class="panel" id="panel-best">
     <div class="card">
+      <h2>أوائل الحصة <span class="tag">SESSION TOP 5</span></h2>
+      <div class="field-row">
+        <div class="field">
+          <label>الصف الدراسي</label>
+          <select id="sessTopStageSelect" onchange="fillSessTopGroups()"></select>
+        </div>
+        <div class="field">
+          <label>المجموعة</label>
+          <select id="sessTopGroupSelect" onchange="fillSessTopSessions()"></select>
+        </div>
+        <div class="field">
+          <label>رقم الحصة</label>
+          <select id="sessTopSessionSelect" onchange="renderSessionTop()"></select>
+        </div>
+      </div>
+      <div id="sessionTopWrap"></div>
+    </div>
+
+    <div class="card">
       <h2>ترتيب المجموعة <span class="tag">LEADERBOARD</span></h2>
-      <div style="font-size:13px; color:#7b887f; margin-bottom:14px;">كل 8 حصص تمثّل شهرًا كاملًا (حصص 1-8 = الشهر الأول، 9-16 = الشهر الثاني، وهكذا) — الترتيب يُحسب على مجموع درجات الشهر المكتمل فقط. ملحوظة: في المرحلة الثانوية (أولى/ثانية/ثالثة ثانوي) كل 4 حصص تعتبر شهرًا بدلًا من 8.</div>
       <div class="field-row">
         <div class="field">
           <label>الصف الدراسي</label>
@@ -617,7 +635,6 @@
 
     <div class="card">
       <h2>بطل التحدي والتقدم <span class="tag">MOST IMPROVED</span></h2>
-      <div style="font-size:13px; color:#7b887f; margin-bottom:14px;">تكريم مختلف عن "الأوائل" — مخصص للطلاب اللي بدأوا من مستوى ضعيف وقدروا يتحدوا نفسهم ويتحسنوا من حصة للي بعدها خلال نفس الشهر. الشروط: (١) بدأ الشهر بمستوى "مقبول" أو "دون المستوى". (٢) حضر كل حصص الشهر بدون أي غياب. (٣) درجاته اتحسنت من حصة لأخرى (مش بس آخر حصة كويسة بالصدفة). الترتيب حسب عدد مرات التحسن بين الحصص.</div>
       <div class="field-row">
         <div class="field">
           <label>الصف الدراسي</label>
@@ -629,26 +646,6 @@
         </div>
       </div>
       <div id="progressChampionWrap"></div>
-    </div>
-
-    <div class="card">
-      <h2>أوائل الحصة <span class="tag">SESSION TOP 5</span></h2>
-      <div style="font-size:13px; color:#7b887f; margin-bottom:14px;">أفضل 5 طلاب في حصة واحدة بالذات، بناءً على إجمالي درجة تلك الحصة فقط (من 70).</div>
-      <div class="field-row">
-        <div class="field">
-          <label>الصف الدراسي</label>
-          <select id="sessTopStageSelect" onchange="fillSessTopGroups()"></select>
-        </div>
-        <div class="field">
-          <label>المجموعة</label>
-          <select id="sessTopGroupSelect" onchange="fillSessTopSessions()"></select>
-        </div>
-        <div class="field">
-          <label>رقم الحصة</label>
-          <select id="sessTopSessionSelect" onchange="renderSessionTop()"></select>
-        </div>
-      </div>
-      <div id="sessionTopWrap"></div>
     </div>
   </section>
 
