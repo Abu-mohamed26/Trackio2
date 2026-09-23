@@ -219,6 +219,8 @@
   .btn-import{ background:var(--accent-students); color:#fff; }
   .btn-import:hover{ opacity:.9; }
   .btn-sm{ padding:6px 12px; font-size:12.5px; border-radius:6px; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .btn:disabled:hover{ border-color:var(--paper-line); color:var(--chalk-green-dark); }
 
   table{ width:100%; border-collapse:collapse; margin-top:6px; }
   thead th{
@@ -426,6 +428,9 @@
 
   <!-- TAB 1: STAGE -->
   <section class="panel" id="panel-stage">
+    <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+      <button class="btn btn-outline btn-sm undo-btn" onclick="undoLastChange()" disabled title="لا يوجد تغييرات للتراجع عنها بعد">↩ تراجع عن آخر تغيير</button>
+    </div>
     <div class="card">
       <h2>اختيار الصف الدراسي <span class="tag">STAGE</span></h2>
       <div class="field-row">
@@ -473,6 +478,9 @@
 
   <!-- TAB 2: GROUP -->
   <section class="panel" id="panel-group">
+    <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+      <button class="btn btn-outline btn-sm undo-btn" onclick="undoLastChange()" disabled title="لا يوجد تغييرات للتراجع عنها بعد">↩ تراجع عن آخر تغيير</button>
+    </div>
     <div class="card">
       <h2>إدارة المجموعات <span class="tag">GROUPS</span></h2>
       <div class="field-row">
@@ -494,6 +502,9 @@
 
   <!-- TAB 3: STUDENTS -->
   <section class="panel" id="panel-students">
+    <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+      <button class="btn btn-outline btn-sm undo-btn" onclick="undoLastChange()" disabled title="لا يوجد تغييرات للتراجع عنها بعد">↩ تراجع عن آخر تغيير</button>
+    </div>
     <div class="card">
       <h2>البحث عن طالب <span class="tag">SEARCH</span></h2>
       <div class="field">
@@ -556,6 +567,9 @@
 
   <!-- TAB 4: GRADES -->
   <section class="panel" id="panel-grades">
+    <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+      <button class="btn btn-outline btn-sm undo-btn" onclick="undoLastChange()" disabled title="لا يوجد تغييرات للتراجع عنها بعد">↩ تراجع عن آخر تغيير</button>
+    </div>
     <div class="card">
       <h2>تسجيل درجات الحصة <span class="tag">SCORES</span></h2>
       <div class="field-row">
@@ -903,6 +917,41 @@ function showToast(text){
 }
 let DATA = loadData();
 
+/* ---------------- UNDO SYSTEM ----------------
+   A single shared history stack. Any risky action in the Stage, Group,
+   Students, or Grades tabs pushes a full snapshot of DATA onto this stack
+   BEFORE mutating it. The "↩ تراجع" button in each of those tabs pops the
+   last snapshot and restores it — undoing the most recent change no matter
+   which of the four tabs it happened in. */
+let undoStack = [];
+const UNDO_LIMIT = 30;
+function pushUndoSnapshot(){
+  try{
+    undoStack.push(JSON.stringify(DATA));
+    if(undoStack.length > UNDO_LIMIT) undoStack.shift();
+  }catch(e){}
+  updateUndoButtons();
+}
+function undoLastChange(){
+  if(undoStack.length===0){ showToast('لا يوجد تغيير يمكن التراجع عنه'); return; }
+  const snap = undoStack.pop();
+  try{
+    DATA = JSON.parse(snap);
+  }catch(e){ showToast('تعذر التراجع عن آخر تغيير'); updateUndoButtons(); return; }
+  saveData(true);
+  const activeBtn = document.querySelector('nav.tabs button.active');
+  if(activeBtn) refreshPanel(activeBtn.dataset.tab);
+  updateUndoButtons();
+  showToast('↩ تم التراجع عن آخر تغيير');
+}
+function updateUndoButtons(){
+  const count = undoStack.length;
+  document.querySelectorAll('.undo-btn').forEach(b=>{
+    b.disabled = count===0;
+    b.title = count>0 ? `عدد خطوات التراجع المتاحة: ${count}` : 'لا يوجد تغييرات للتراجع عنها بعد';
+  });
+}
+
 function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
 /* ---------------- HELPERS ---------------- */
@@ -951,6 +1000,7 @@ function refreshPanel(tab){
   if(tab==='grades') renderGradesTab();
   if(tab==='best') renderBestTab();
   if(tab==='contact') renderContactTab();
+  updateUndoButtons();
 }
 
 /* ---------------- TAB: BASIC INFO ---------------- */
@@ -1090,6 +1140,7 @@ function editGroupName(gid){
   if(newName===null) return;
   const trimmed = newName.trim();
   if(!trimmed){ alert('اسم المجموعة لا يمكن أن يكون فارغًا'); return; }
+  pushUndoSnapshot();
   g.name = trimmed;
   saveData(true);
   showToast('✓ تم تعديل اسم المجموعة');
@@ -1100,6 +1151,7 @@ function addGroup(){
   const nameInput = document.getElementById('newGroupName');
   const name = nameInput.value.trim();
   if(!name){ alert('من فضلك اكتب اسم المجموعة'); return; }
+  pushUndoSnapshot();
   DATA.groups.push({ id: uid('g'), stageId, name });
   nameInput.value='';
   saveData();
@@ -1109,9 +1161,12 @@ function deleteGroup(id){
   const count = studentsByGroup(id).length;
   if(count>0){
     if(!confirm(`هذه المجموعة بها ${count} طالب. سيتم حذف المجموعة وبيانات الطلاب المرتبطين بها ودرجاتهم. هل تريد المتابعة؟`)) return;
+    pushUndoSnapshot();
     const studentIds = studentsByGroup(id).map(s=>s.id);
     DATA.students = DATA.students.filter(s=>s.groupId!==id);
     DATA.grades = DATA.grades.filter(gr=>!studentIds.includes(gr.studentId));
+  } else {
+    pushUndoSnapshot();
   }
   DATA.groups = DATA.groups.filter(g=>g.id!==id);
   expandedGroupIds.delete(id);
@@ -1241,6 +1296,7 @@ function confirmSearchEdit(studentId){
   const phone = document.getElementById('srchEditPhone_'+studentId).value.trim();
   const parentPhone = document.getElementById('srchEditParentPhone_'+studentId).value.trim();
   if(!name){ alert('اسم الطالب لا يمكن أن يكون فارغًا'); return; }
+  pushUndoSnapshot();
   student.name = name;
   student.parentName = parentName;
   student.phone = phone;
@@ -1324,6 +1380,7 @@ function addStudent(){
   const parentPhone = document.getElementById('stuParentPhone').value.trim();
   if(!groupId){ alert('من فضلك اختر مجموعة (أضف مجموعة أولًا من تبويب المجموعة)'); return; }
   if(!name){ alert('من فضلك اكتب اسم الطالب'); return; }
+  pushUndoSnapshot();
   DATA.students.push({
     id: uid('s'), stageId, groupId, name, parentName,
     phone, parentPhone, code: generateStudentCode(DATA.students)
@@ -1412,6 +1469,7 @@ function saveStudentEdit(studentId){
   const phone = document.getElementById('editPhone_'+studentId).value.trim();
   const parentPhone = document.getElementById('editParentPhone_'+studentId).value.trim();
   if(!name){ alert('اسم الطالب لا يمكن أن يكون فارغًا'); return; }
+  pushUndoSnapshot();
   student.name = name;
   student.parentName = parentName;
   student.phone = phone;
@@ -1428,6 +1486,7 @@ function performMoveStudent(studentId, newGroupId){
   if(!student || !newGroupId || newGroupId===student.groupId) return false;
   const newGroup = DATA.groups.find(g=>g.id===newGroupId);
   if(!newGroup) return false;
+  pushUndoSnapshot();
   const oldGroupId = student.groupId;
 
   // Carry the student's grade history over to the new group so it isn't
@@ -1457,6 +1516,7 @@ function moveStudent(studentId){
 }
 function deleteStudent(id){
   if(!confirm('هل تريد حذف هذا الطالب وكل درجاته المسجلة؟')) return;
+  pushUndoSnapshot();
   DATA.students = DATA.students.filter(s=>s.id!==id);
   DATA.grades = DATA.grades.filter(g=>g.studentId!==id);
   saveData();
@@ -1512,19 +1572,24 @@ function promoteStudents(){
 
   let targetGroupId = toGroupSel;
   let targetGroupLabel = '';
+  let newGroupName = '';
   if(toGroupSel === '__new__'){
-    const name = document.getElementById('promoteNewGroupName').value.trim();
-    if(!name){ alert('من فضلك اكتب اسم المجموعة الجديدة'); return; }
-    const newGroup = { id: uid('g'), stageId: toStage, name };
-    DATA.groups.push(newGroup);
-    targetGroupId = newGroup.id;
-    targetGroupLabel = name;
+    newGroupName = document.getElementById('promoteNewGroupName').value.trim();
+    if(!newGroupName){ alert('من فضلك اكتب اسم المجموعة الجديدة'); return; }
+    targetGroupLabel = newGroupName;
   } else {
     if(!targetGroupId){ alert('اختر أو أنشئ مجموعة للصف الجديد'); return; }
     targetGroupLabel = groupName(targetGroupId);
   }
 
-  if(!confirm(`سيتم ترحيل ${students.length} طالب من "${stageName(fromStage)}" إلى "${stageName(toStage)} — ${targetGroupLabel}".\nسيتم الاحتفاظ ببياناتهم الأساسية فقط (الاسم، ولي الأمر، الأرقام)، وحذف سجل درجاتهم السابق حتى يبدأوا العام الجديد بسجل نظيف. متابعة؟`)) return;
+  if(!confirm(`سيتم ترحيل ${students.length} طالب من "${stageName(fromStage)}" إلى "${stageName(toStage)} — ${targetGroupLabel}".\nسيتم الاحتفاظ ببياناتهم الأساسية فقط وحذف سجل درجاتهم السابق. يمكنك التراجع عن هذه الخطوة بعد التنفيذ.`)) return;
+  pushUndoSnapshot();
+
+  if(toGroupSel === '__new__'){
+    const newGroup = { id: uid('g'), stageId: toStage, name: newGroupName };
+    DATA.groups.push(newGroup);
+    targetGroupId = newGroup.id;
+  }
 
   const studentIds = students.map(s=>s.id);
   students.forEach(s=>{ s.stageId = toStage; s.groupId = targetGroupId; });
@@ -1597,6 +1662,7 @@ function deleteSession(){
   const session = Number(sessionSel.value);
   const count = DATA.grades.filter(g=>g.groupId===groupId && g.session===session).length;
   if(!confirm(`سيتم حذف كل الدرجات المسجلة في حصة رقم ${session} لهذه المجموعة (${count} سجل). هل أنت متأكد؟`)) return;
+  pushUndoSnapshot();
   DATA.grades = DATA.grades.filter(g=>!(g.groupId===groupId && g.session===session));
   saveData(true);
   showToast(`✓ تم حذف حصة رقم ${session}`);
@@ -1698,7 +1764,8 @@ function renderLeaderboard(){
   }
   const all = students.map(s=>{
     const records = DATA.grades.filter(g=>g.groupId===groupId && g.studentId===s.id && g.session>=block.start && g.session<=block.end);
-    const total = records.reduce((a,r)=>a+totalOf(r),0);
+    const avgT = computeAvgTasmee(records);
+    const total = records.reduce((a,r)=>a+totalOfMonthly(r,avgT),0);
     const absences = records.filter(r=>r.attendance==='غائب').length;
     return { student:s, total, absences, sessionsRecorded:records.length };
   });
@@ -1773,7 +1840,8 @@ function renderProgressChampion(){
       .sort((a,b)=>a.session-b.session);
     if(records.length < block.blockSize) return null; // needs every session of the month recorded
     if(records.some(r=>r.attendance==='غائب')) return null; // no absences in this month
-    const totals = records.map(r=>totalOf(r));
+    const avgT = computeAvgTasmee(records);
+    const totals = records.map(r=>totalOfMonthly(r,avgT));
     const firstLevel = levelOf(totals[0]);
     if(firstLevel.label!=='مقبول' && firstLevel.label!=='دون المستوى') return null;
     let improvingSteps = 0;
@@ -1934,6 +2002,7 @@ function saveSessionMax(){
   const tasmee = Number(document.getElementById('maxTasmeeInput').value) || 20;
   const wagib = Number(document.getElementById('maxWagibInput').value) || 20;
   const exam = Number(document.getElementById('maxExamInput').value) || 10;
+  pushUndoSnapshot();
   if(!DATA.sessionMax) DATA.sessionMax = {};
   DATA.sessionMax[groupId + '_' + session] = { tasmee, wagib, exam };
   saveData(true);
@@ -2005,6 +2074,7 @@ function toggleNoTasmee(){
   if(!groupId || !session){ document.getElementById('noTasmeeToggle').checked = false; return; }
   const checked = document.getElementById('noTasmeeToggle').checked;
   const key = groupId + '_' + session;
+  pushUndoSnapshot();
   if(!DATA.sessionNoTasmee) DATA.sessionNoTasmee = {};
   if(checked){
     DATA.sessionNoTasmee[key] = true;
@@ -2066,6 +2136,7 @@ function collectGradesFromTable(){
 }
 let gradesAutosaveTimer = null;
 let gradesAutosaveAttached = false;
+let gradesUndoSnapshotTaken = false; // ensures one undo-step per typing burst, not one per keystroke
 function attachGradesAutosave(){
   if(gradesAutosaveAttached) return;
   gradesAutosaveAttached = true;
@@ -2083,10 +2154,15 @@ function attachGradesAutosave(){
   wrap.addEventListener('input', (e)=>{
     const t = e.target;
     clearTimeout(gradesAutosaveTimer);
+    if(!gradesUndoSnapshotTaken){
+      pushUndoSnapshot();
+      gradesUndoSnapshotTaken = true;
+    }
     gradesAutosaveTimer = setTimeout(()=>{
       applyClampTo(t);
       collectGradesFromTable();
       saveData();
+      gradesUndoSnapshotTaken = false;
     }, 500);
   });
   wrap.addEventListener('blur', (e)=>{
@@ -2094,6 +2170,7 @@ function attachGradesAutosave(){
   }, true);
   wrap.addEventListener('change', (e)=>{
     if(e.target.classList.contains('g-attendance')){
+      pushUndoSnapshot();
       collectGradesFromTable();
       saveData();
       renderGradesTable();
@@ -2102,6 +2179,7 @@ function attachGradesAutosave(){
 }
 function saveGrades(){
   if(!document.getElementById('gradeGroupSelect').value){ alert('اختر مجموعة أولًا'); return; }
+  pushUndoSnapshot();
   collectGradesFromTable();
   saveData(true);
   const session = document.getElementById('sessionSelect').value;
@@ -2113,6 +2191,7 @@ async function saveAndPublishGroup(){
   const btn = document.getElementById('saveAndPublishBtn');
   if(!groupId){ alert('اختر مجموعة أولًا'); return; }
 
+  pushUndoSnapshot();
   collectGradesFromTable();
   saveData(true);
 
@@ -2174,6 +2253,32 @@ function totalOf(rec){
   const vals = [rec.tasmee, rec.wagib, rec.exam, rec.discipline, rec.performance].map(v=>Number(v)||0);
   return vals.reduce((a,b)=>a+b,0);
 }
+/* Fair monthly tasmee average — computed ONLY from sessions where a tasmee
+   score was actually recorded for this student (excludes "no tasmee this
+   session" and absences), so a session with no tasmee doesn't drag the
+   average down with a zero that was never earned or lost. */
+function computeAvgTasmee(records){
+  const vals = (records||[])
+    .filter(r=>r.attendance!=='غائب' && r.tasmee!=null && r.tasmee!=='')
+    .map(r=>Number(r.tasmee));
+  if(vals.length===0) return null;
+  return Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10;
+}
+/* Same as totalOf, but for a session where the student attended and the
+   WHOLE GROUP was marked "no tasmee this session" (the group-wide toggle),
+   the student's monthly tasmee average stands in for it instead of a zero —
+   so the 20 tasmee points for that session aren't lost from the monthly
+   total. This deliberately does NOT apply when only this one student's
+   tasmee is blank/zero while the rest of the group has scores — that is
+   the student's real, individual grade and is left exactly as entered. An
+   absence is untouched either way: an absent session stays at zero. */
+function totalOfMonthly(rec, avgTasmee){
+  const noTasmeeSession = rec.groupId!=null && rec.session!=null && getNoTasmee(rec.groupId, rec.session);
+  const missesTasmee = rec.attendance!=='غائب' && noTasmeeSession && (rec.tasmee==null || rec.tasmee==='');
+  const effectiveTasmee = (missesTasmee && avgTasmee!=null) ? avgTasmee : rec.tasmee;
+  const vals = [effectiveTasmee, rec.wagib, rec.exam, rec.discipline, rec.performance].map(v=>Number(v)||0);
+  return vals.reduce((a,b)=>a+b,0);
+}
 function levelOf(total){
   // Thresholds on the per-session scale (out of 70):
   // ممتاز 62.5-70، جيد جدًا 55-62.4، جيد 45-54.9، مقبول 35-44.9، دون المستوى أقل من 35
@@ -2220,12 +2325,13 @@ function buildMessageForStudent(student, type, groupId, session, month){
       msg += month ? `لا توجد حصص مسجلة لهذا الطالب في هذا الشهر.` : `لا توجد حصص مسجلة لهذا الطالب بعد.`;
     } else {
       msg += `📊 ملخص الأداء${monthLabel} (${records.length} حصة)\n\n`;
+      const avgT = computeAvgTasmee(records);
       records.forEach(rec=>{
-        const total = totalOf(rec);
+        const total = totalOfMonthly(rec, avgT);
         msg += `حصة ${rec.session}: ${rec.attendance||'—'} — إجمالي ${total}/70 (${levelOf(total).label})\n`;
       });
       const absences = records.filter(r=>r.attendance==='غائب').length;
-      const avgTotal = records.reduce((a,r)=>a+totalOf(r),0) / records.length;
+      const avgTotal = records.reduce((a,r)=>a+totalOfMonthly(r,avgT),0) / records.length;
       msg += `\nعدد مرات الغياب: ${absences}\n`;
       msg += `*متوسط درجة الحصة: ${avgTotal.toFixed(1)} / 70*\n`;
       msg += `*المستوى العام: ${levelOf(avgTotal).label}*`;
@@ -2302,7 +2408,19 @@ function computeWeakness(records, blockSize){
   const block = getSessionBlock(maxSession, blockSize);
   const blockRecords = records.filter(r=>r.session>=block.start && r.session<=block.end);
   const n = blockRecords.length;
-  const avg = key => blockRecords.reduce((a,r)=>a + (Number(r[key])||0), 0) / n;
+  const avg = key => {
+    if(key==='tasmee'){
+      // Sessions where the WHOLE GROUP had "no tasmee" toggled on are left
+      // out of this average entirely — there was nothing to score. But if
+      // only this one student's tasmee is blank/zero in an otherwise normal
+      // session, that counts as their real (zero) grade, same as any other
+      // metric — it is NOT excluded.
+      const usable = blockRecords.filter(r=>!getNoTasmee(r.groupId, r.session) || (r.tasmee!=null && r.tasmee!==''));
+      if(usable.length===0) return 0;
+      return usable.reduce((a,r)=>a+(Number(r.tasmee)||0),0) / usable.length;
+    }
+    return blockRecords.reduce((a,r)=>a + (Number(r[key])||0), 0) / n;
+  };
   const presentCount = blockRecords.filter(r=>r.attendance!=='غائب').length;
   const attendanceRate = (presentCount/n)*100;
   const metrics = [
@@ -2455,7 +2573,8 @@ function getCertificateStatus(studentId, groupId, monthOverride){
   const students = studentsByGroup(groupId);
   const eligible = students.map(s=>{
     const records = DATA.grades.filter(g=>g.groupId===groupId && g.studentId===s.id && g.session>=block.start && g.session<=block.end);
-    const total = records.reduce((a,r)=>a+totalOf(r),0);
+    const avgT = computeAvgTasmee(records);
+    const total = records.reduce((a,r)=>a+totalOfMonthly(r,avgT),0);
     const absences = records.filter(r=>r.attendance==='غائب').length;
     return { studentId: s.id, total, absences, sessionsRecorded: records.length };
   }).filter(r=>r.absences===0 && r.sessionsRecorded>0).sort((a,b)=>b.total-a.total);
@@ -3245,7 +3364,11 @@ function buildStudentPayload(studentId){
       w: safeGradeNum(r.wagib),
       e: safeGradeNum(r.exam),
       d: safeGradeNum(r.discipline),
-      f: safeGradeNum(r.performance)
+      f: safeGradeNum(r.performance),
+      // Whether the WHOLE GROUP had "no tasmee" toggled for this session —
+      // lets the portal apply the monthly average fill only in that case,
+      // never for an individual student's own blank/zero tasmee score.
+      nt: getNoTasmee(r.groupId, r.session) ? 1 : 0
     }))
   };
 }
@@ -3480,6 +3603,21 @@ function pvTotalOf(rec){
   const vals = [rec.t, rec.w, rec.e, rec.d, rec.f].map(v=>Number(v)||0);
   return vals.reduce((a,b)=>a+b,0);
 }
+/* Portal-side equivalents of computeAvgTasmee/totalOfMonthly — same fairness
+   rule, just using the payload's short field names (p:present, t:tasmee). */
+function pvComputeAvgTasmee(records){
+  const vals = (records||[])
+    .filter(r=>r.p!==0 && r.t!=null)
+    .map(r=>Number(r.t));
+  if(vals.length===0) return null;
+  return Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10;
+}
+function pvTotalOfMonthly(rec, avgTasmee){
+  const missesTasmee = rec.p!==0 && rec.nt===1 && rec.t==null;
+  const effectiveTasmee = (missesTasmee && avgTasmee!=null) ? avgTasmee : rec.t;
+  const vals = [effectiveTasmee, rec.w, rec.e, rec.d, rec.f].map(v=>Number(v)||0);
+  return vals.reduce((a,b)=>a+b,0);
+}
 function renderParentReport(payload, containerId){
   containerId = containerId || 'pvContent';
   const records = payload.r || [];
@@ -3511,7 +3649,8 @@ function renderParentReport(payload, containerId){
   blockIndices.forEach(bi=>{
     const blockRecords = blocks[bi].sort((a,b)=>a.s-b.s);
     const start = (bi-1)*blockSize+1, end = bi*blockSize;
-    const blockTotal = blockRecords.reduce((a,r)=>a+pvTotalOf(r),0);
+    const avgT = pvComputeAvgTasmee(blockRecords);
+    const blockTotal = blockRecords.reduce((a,r)=>a+pvTotalOfMonthly(r,avgT),0);
     const blockAvg = blockTotal/blockRecords.length;
     const blockLevel = levelOf(blockAvg);
     html += `<div class="pv-block">
@@ -3521,7 +3660,7 @@ function renderParentReport(payload, containerId){
       </h3>`;
     blockRecords.forEach(rec=>{
       const { s: session, p: present, t: tasmee, w: wagib, e: exam, d: discipline, f: performance } = rec;
-      const total = pvTotalOf(rec);
+      const total = pvTotalOfMonthly(rec, avgT);
       const level = levelOf(total);
       html += `<div class="pv-session-row">
         <div class="pv-session-num">حصة ${session}</div>
