@@ -1785,7 +1785,7 @@ function renderLeaderboard(){
     const cls = r.rank<=3 ? medalClass[r.rank-1] : '';
     const icon = r.rank<=3 ? medalIcon[r.rank-1] : r.rank;
     const avgLevel = levelOf(r.total/blockSize);
-    const certEligible = r.rank<=2 && avgLevel.label==='ممتاز';
+    const certEligible = r.rank<=3 && avgLevel.label==='ممتاز';
     return `<div class="rank-card ${cls}">
       <div class="rank-num">${icon}</div>
       <div class="rank-info">
@@ -2580,7 +2580,7 @@ function getCertificateStatus(studentId, groupId, monthOverride){
   }).filter(r=>r.absences===0 && r.sessionsRecorded>0).sort((a,b)=>b.total-a.total);
 
   const idx = eligible.findIndex(r=>r.studentId===studentId);
-  if(idx<0 || idx>1) return null;
+  if(idx<0 || idx>2) return null;
   const avgLevel = levelOf(eligible[idx].total/block.blockSize);
   if(avgLevel.label!=='ممتاز') return null;
   return { rank: idx+1, block, total: eligible[idx].total };
