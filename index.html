@@ -1200,6 +1200,7 @@ function renderStudentSearch(){
         <button class="btn ${action==='move'?'btn-teal':'btn-outline'} btn-sm" onclick="toggleSearchAction('${s.id}','move')">نقل</button>
         <button class="btn ${action==='edit'?'btn-teal':'btn-outline'} btn-sm" onclick="toggleSearchAction('${s.id}','edit')">تعديل</button>
         <button class="btn ${action==='contact'?'btn-teal':'btn-outline'} btn-sm" onclick="toggleSearchAction('${s.id}','contact')">تواصل</button>
+        <button class="btn ${action==='grades'?'btn-teal':'btn-outline'} btn-sm" onclick="toggleSearchAction('${s.id}','grades')">📊 درجات</button>
         <button class="btn btn-danger btn-sm" onclick="deleteStudentFromSearch('${s.id}')">حذف</button>
       </div>
       ${action ? `<div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--paper-line);">${searchActionPanelHTML(s, action)}</div>` : ''}
@@ -1276,6 +1277,40 @@ function searchActionPanelHTML(s, action){
         <textarea id="srchContactMsg_${s.id}" rows="2" placeholder="اكتب رسالتك هنا..." oninput="renderSearchContactTargets('${s.id}')"></textarea>
       </div>
       <div id="srchContactTargets_${s.id}" style="margin-top:10px;"></div>
+    `;
+  }
+  if(action==='grades'){
+    const records = DATA.grades.filter(g=>g.studentId===s.id).sort((a,b)=>a.session-b.session);
+    if(records.length===0){
+      return `<div style="font-size:12.5px;color:#8b988f;">لا توجد درجات مسجلة لهذا الطالب بعد.</div>`;
+    }
+    const rows = records.map(r=>{
+      const isAbsent = r.attendance==='غائب';
+      const total = isAbsent ? 0 : totalOf(r);
+      const lvl = levelOf(total);
+      const cell = v => isAbsent ? '—' : (v==null ? '—' : v);
+      return `<tr class="${isAbsent?'row-absent':''}">
+        <td class="mono">${r.session}</td>
+        <td>${groupName(r.groupId)}</td>
+        <td>${isAbsent ? '<span style="color:var(--red); font-weight:600;">غائب</span>' : 'حاضر'}</td>
+        <td>${cell(r.tasmee)}</td>
+        <td>${cell(r.wagib)}</td>
+        <td>${cell(r.exam)}</td>
+        <td>${cell(r.discipline)}</td>
+        <td>${cell(r.performance)}</td>
+        <td style="font-weight:700;">${total}/70</td>
+        <td><span style="color:${lvl.color}; font-weight:600;">${lvl.label}</span></td>
+      </tr>`;
+    }).join('');
+    return `
+      <div style="overflow-x:auto;">
+        <table style="min-width:680px;">
+          <thead><tr>
+            <th>الحصة</th><th>المجموعة</th><th>الحضور</th><th>تسميع</th><th>واجب</th><th>امتحان</th><th>انضباط</th><th>أداء</th><th>الإجمالي</th><th>التقييم</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
     `;
   }
   return '';
@@ -2051,13 +2086,14 @@ function renderGradesTable(){
       <td><input type="number" class="g-exam" min="0" max="${sessMax.exam}" value="${isAbsent?'':toDisplay(rec.exam, 10, sessMax.exam)}" placeholder="/${sessMax.exam}" ${dis}></td>
       <td><input type="number" class="g-discipline" min="0" max="10" value="${isAbsent?'':(rec.discipline ?? 10)}" placeholder="/10" ${dis}></td>
       <td><input type="number" class="g-performance" min="0" max="10" value="${isAbsent?'':(rec.performance ?? 10)}" placeholder="/10" ${dis}></td>
+      <td class="g-total-cell" style="font-weight:700; text-align:center; color:var(--teal);">${isAbsent?0:totalOf(rec)}</td>
     </tr>`;
   }).join('');
   wrap.innerHTML = `<table>
     <thead><tr>
       <th>رقم الحصة</th><th>اسم الطالب</th><th>الحضور</th>
       <th>التسميع /${sessMax.tasmee}</th><th>الواجب /${sessMax.wagib}</th><th>امتحان الحصة /${sessMax.exam}</th>
-      <th>الانضباط /10</th><th>الأداء الصفي /10</th>
+      <th>الانضباط /10</th><th>الأداء الصفي /10</th><th>المجموع الكلي /70</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -2094,6 +2130,33 @@ function proportionalClamp(v, max){
   if(v <= max) return v;
   const k = Math.ceil(v/max);
   return Math.round((v/k)*10)/10;
+}
+/* Live "المجموع الكلي" (total /70) for one row in the grades table — reads
+   straight from the inputs as the teacher types (before anything is saved),
+   converting each field back onto the standard 20/20/10 scale first so the
+   total is always out of 70 regardless of this session's custom max. */
+function computeRowTotal(tr, sessMax, noTasmee){
+  const attendanceSel = tr.querySelector('.g-attendance');
+  if(attendanceSel && attendanceSel.value==='غائب') return 0;
+  const toStandard = (v, customMax, standardMax) => {
+    v = Number(v); if(isNaN(v) || v==='') return 0;
+    const raw = proportionalClamp(v, customMax);
+    if(customMax === standardMax) return raw;
+    return (raw/customMax)*standardMax;
+  };
+  const toStandard10 = (v) => { v = Number(v); if(isNaN(v) || v==='') return 0; return proportionalClamp(v, 10); };
+  const tasmeeInput = tr.querySelector('.g-tasmee');
+  const tasmee = (noTasmee || !tasmeeInput || tasmeeInput.disabled) ? 0 : toStandard(tasmeeInput.value, sessMax.tasmee, 20);
+  const wagib = toStandard(tr.querySelector('.g-wagib').value, sessMax.wagib, 20);
+  const exam = toStandard(tr.querySelector('.g-exam').value, sessMax.exam, 10);
+  const discipline = toStandard10(tr.querySelector('.g-discipline').value);
+  const performance = toStandard10(tr.querySelector('.g-performance').value);
+  return Math.round((tasmee+wagib+exam+discipline+performance)*10)/10;
+}
+function updateRowTotalDisplay(tr, sessMax, noTasmee){
+  const cell = tr && tr.querySelector('.g-total-cell');
+  if(!cell) return;
+  cell.textContent = computeRowTotal(tr, sessMax, noTasmee);
 }
 function collectGradesFromTable(){
   const groupId = document.getElementById('gradeGroupSelect').value;
@@ -2153,6 +2216,12 @@ function attachGradesAutosave(){
   };
   wrap.addEventListener('input', (e)=>{
     const t = e.target;
+    const tr = t.closest && t.closest('tr');
+    if(tr && t.matches && t.matches(gradeFieldSelector)){
+      const groupId = document.getElementById('gradeGroupSelect').value;
+      const session = Number(document.getElementById('sessionSelect').value);
+      updateRowTotalDisplay(tr, getSessionMax(groupId, session), getNoTasmee(groupId, session));
+    }
     clearTimeout(gradesAutosaveTimer);
     if(!gradesUndoSnapshotTaken){
       pushUndoSnapshot();
@@ -2162,6 +2231,11 @@ function attachGradesAutosave(){
       applyClampTo(t);
       collectGradesFromTable();
       saveData();
+      if(tr && t.matches && t.matches(gradeFieldSelector)){
+        const groupId = document.getElementById('gradeGroupSelect').value;
+        const session = Number(document.getElementById('sessionSelect').value);
+        updateRowTotalDisplay(tr, getSessionMax(groupId, session), getNoTasmee(groupId, session));
+      }
       gradesUndoSnapshotTaken = false;
     }, 500);
   });
