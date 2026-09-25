@@ -567,9 +567,6 @@
 
   <!-- TAB 4: GRADES -->
   <section class="panel" id="panel-grades">
-    <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
-      <button class="btn btn-outline btn-sm undo-btn" onclick="undoLastChange()" disabled title="لا يوجد تغييرات للتراجع عنها بعد">↩ تراجع عن آخر تغيير</button>
-    </div>
     <div class="card">
       <h2>تسجيل درجات الحصة <span class="tag">SCORES</span></h2>
       <div class="field-row">
@@ -587,7 +584,8 @@
         </div>
         <div class="field" style="justify-content:flex-end;">
           <button class="btn btn-outline" onclick="newSession()">+ حصة جديدة</button>
-          <button class="btn btn-danger" onclick="deleteSession()">🗑 حذف الحصة</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteSession()">🗑 حذف الحصة</button>
+          <button class="btn btn-outline btn-sm undo-btn" onclick="undoLastChange()" disabled title="لا يوجد تغييرات للتراجع عنها بعد">↩ تراجع</button>
         </div>
       </div>
       <div id="sessionMaxBar" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;"></div>
