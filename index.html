@@ -2069,6 +2069,11 @@ function renderGradesTable(){
     const rec = DATA.grades.find(g=>g.groupId===groupId && g.session===session && g.studentId===s.id) || {};
     const isAbsent = rec.attendance==='غائب';
     const dis = isAbsent ? 'disabled' : '';
+    let displayTotal = isAbsent ? 0 : totalOf(rec);
+    if(!isAbsent && noTasmee){
+      const fill = getMonthlyTasmeeFill(groupId, s.id, session);
+      if(fill!=null) displayTotal = Math.round((displayTotal+fill)*10)/10;
+    }
     const tasmeeCell = noTasmee
       ? `<input type="text" class="g-tasmee" value="لا يوجد" disabled style="text-align:center; color:#9CA3AF; background:#F3F4F6;">`
       : `<input type="number" class="g-tasmee" min="0" max="${sessMax.tasmee}" value="${isAbsent?'':toDisplay(rec.tasmee, 20, sessMax.tasmee)}" placeholder="/${sessMax.tasmee}" ${dis}>`;
@@ -2086,7 +2091,7 @@ function renderGradesTable(){
       <td><input type="number" class="g-exam" min="0" max="${sessMax.exam}" value="${isAbsent?'':toDisplay(rec.exam, 10, sessMax.exam)}" placeholder="/${sessMax.exam}" ${dis}></td>
       <td><input type="number" class="g-discipline" min="0" max="10" value="${isAbsent?'':(rec.discipline ?? 10)}" placeholder="/10" ${dis}></td>
       <td><input type="number" class="g-performance" min="0" max="10" value="${isAbsent?'':(rec.performance ?? 10)}" placeholder="/10" ${dis}></td>
-      <td class="g-total-cell" style="font-weight:700; text-align:center; color:var(--teal);">${isAbsent?0:totalOf(rec)}</td>
+      <td class="g-total-cell" style="font-weight:700; text-align:center; color:var(--teal);">${displayTotal}</td>
     </tr>`;
   }).join('');
   wrap.innerHTML = `<table>
@@ -2135,7 +2140,30 @@ function proportionalClamp(v, max){
    straight from the inputs as the teacher types (before anything is saved),
    converting each field back onto the standard 20/20/10 scale first so the
    total is always out of 70 regardless of this session's custom max. */
-function computeRowTotal(tr, sessMax, noTasmee){
+/* Whether — and by how much — a session's missing tasmee should be
+   topped up from the student's monthly average, for display in the
+   "المجموع الكلي" column of the grades table. Only applies when:
+   1) the WHOLE GROUP had "no tasmee" toggled on for this exact session
+      (an individual student's own blank/zero tasmee is their real grade
+      and is never topped up), and
+   2) that session's month is already fully recorded for the group — the
+      fill is a MONTHLY average, so it isn't known/fair until the month is
+      over. While the month is still in progress this returns null and the
+      session simply shows its raw total, same as before.
+   Returns the average to add on top of the raw total, or null if no fill
+   applies. */
+function getMonthlyTasmeeFill(groupId, studentId, session){
+  if(!getNoTasmee(groupId, session)) return null;
+  const group = DATA.groups.find(g=>g.id===groupId);
+  const blockSize = getBlockSize(group ? group.stageId : null);
+  const blockIndex = Math.ceil(session/blockSize);
+  const isBlockComplete = getGroupCompleteBlocks(groupId).some(b=>b.blockIndex===blockIndex);
+  if(!isBlockComplete) return null;
+  const blockStart = (blockIndex-1)*blockSize+1, blockEnd = blockIndex*blockSize;
+  const blockRecords = DATA.grades.filter(g=>g.groupId===groupId && g.studentId===studentId && g.session>=blockStart && g.session<=blockEnd);
+  return computeAvgTasmee(blockRecords);
+}
+function computeRowTotal(tr, sessMax, noTasmee, groupId, session){
   const attendanceSel = tr.querySelector('.g-attendance');
   if(attendanceSel && attendanceSel.value==='غائب') return 0;
   const toStandard = (v, customMax, standardMax) => {
@@ -2146,17 +2174,21 @@ function computeRowTotal(tr, sessMax, noTasmee){
   };
   const toStandard10 = (v) => { v = Number(v); if(isNaN(v) || v==='') return 0; return proportionalClamp(v, 10); };
   const tasmeeInput = tr.querySelector('.g-tasmee');
-  const tasmee = (noTasmee || !tasmeeInput || tasmeeInput.disabled) ? 0 : toStandard(tasmeeInput.value, sessMax.tasmee, 20);
+  let tasmee = (noTasmee || !tasmeeInput || tasmeeInput.disabled) ? 0 : toStandard(tasmeeInput.value, sessMax.tasmee, 20);
+  if(noTasmee && groupId && session){
+    const fill = getMonthlyTasmeeFill(groupId, tr.dataset.student, session);
+    if(fill!=null) tasmee = fill;
+  }
   const wagib = toStandard(tr.querySelector('.g-wagib').value, sessMax.wagib, 20);
   const exam = toStandard(tr.querySelector('.g-exam').value, sessMax.exam, 10);
   const discipline = toStandard10(tr.querySelector('.g-discipline').value);
   const performance = toStandard10(tr.querySelector('.g-performance').value);
   return Math.round((tasmee+wagib+exam+discipline+performance)*10)/10;
 }
-function updateRowTotalDisplay(tr, sessMax, noTasmee){
+function updateRowTotalDisplay(tr, sessMax, noTasmee, groupId, session){
   const cell = tr && tr.querySelector('.g-total-cell');
   if(!cell) return;
-  cell.textContent = computeRowTotal(tr, sessMax, noTasmee);
+  cell.textContent = computeRowTotal(tr, sessMax, noTasmee, groupId, session);
 }
 function collectGradesFromTable(){
   const groupId = document.getElementById('gradeGroupSelect').value;
@@ -2220,7 +2252,7 @@ function attachGradesAutosave(){
     if(tr && t.matches && t.matches(gradeFieldSelector)){
       const groupId = document.getElementById('gradeGroupSelect').value;
       const session = Number(document.getElementById('sessionSelect').value);
-      updateRowTotalDisplay(tr, getSessionMax(groupId, session), getNoTasmee(groupId, session));
+      updateRowTotalDisplay(tr, getSessionMax(groupId, session), getNoTasmee(groupId, session), groupId, session);
     }
     clearTimeout(gradesAutosaveTimer);
     if(!gradesUndoSnapshotTaken){
@@ -2234,7 +2266,7 @@ function attachGradesAutosave(){
       if(tr && t.matches && t.matches(gradeFieldSelector)){
         const groupId = document.getElementById('gradeGroupSelect').value;
         const session = Number(document.getElementById('sessionSelect').value);
-        updateRowTotalDisplay(tr, getSessionMax(groupId, session), getNoTasmee(groupId, session));
+        updateRowTotalDisplay(tr, getSessionMax(groupId, session), getNoTasmee(groupId, session), groupId, session);
       }
       gradesUndoSnapshotTaken = false;
     }, 500);
@@ -2327,16 +2359,17 @@ function totalOf(rec){
   const vals = [rec.tasmee, rec.wagib, rec.exam, rec.discipline, rec.performance].map(v=>Number(v)||0);
   return vals.reduce((a,b)=>a+b,0);
 }
-/* Fair monthly tasmee average — computed ONLY from sessions where a tasmee
-   score was actually recorded for this student (excludes "no tasmee this
-   session" and absences), so a session with no tasmee doesn't drag the
-   average down with a zero that was never earned or lost. */
+/* Fair monthly tasmee average — excludes ONLY sessions where the WHOLE
+   GROUP had "no tasmee" toggled on (there was no assignment to score that
+   session). Every other session in the month counts toward the average,
+   including an absence or an individual blank score — those contribute a
+   real zero, exactly like any other metric — so the average reflects what
+   the student actually earned across the month. */
 function computeAvgTasmee(records){
-  const vals = (records||[])
-    .filter(r=>r.attendance!=='غائب' && r.tasmee!=null && r.tasmee!=='')
-    .map(r=>Number(r.tasmee));
-  if(vals.length===0) return null;
-  return Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10;
+  const usable = (records||[]).filter(r=>!getNoTasmee(r.groupId, r.session));
+  if(usable.length===0) return null;
+  const sum = usable.reduce((a,r)=>a + (Number(r.tasmee)||0), 0);
+  return Math.round((sum/usable.length)*10)/10;
 }
 /* Same as totalOf, but for a session where the student attended and the
    WHOLE GROUP was marked "no tasmee this session" (the group-wide toggle),
@@ -2487,11 +2520,10 @@ function computeWeakness(records, blockSize){
       // Sessions where the WHOLE GROUP had "no tasmee" toggled on are left
       // out of this average entirely — there was nothing to score. But if
       // only this one student's tasmee is blank/zero in an otherwise normal
-      // session, that counts as their real (zero) grade, same as any other
-      // metric — it is NOT excluded.
-      const usable = blockRecords.filter(r=>!getNoTasmee(r.groupId, r.session) || (r.tasmee!=null && r.tasmee!==''));
-      if(usable.length===0) return 0;
-      return usable.reduce((a,r)=>a+(Number(r.tasmee)||0),0) / usable.length;
+      // session (or they were absent), that counts as their real (zero)
+      // grade, same as any other metric — it is NOT excluded.
+      const fair = computeAvgTasmee(blockRecords);
+      return fair==null ? 0 : fair;
     }
     return blockRecords.reduce((a,r)=>a + (Number(r[key])||0), 0) / n;
   };
@@ -3677,14 +3709,15 @@ function pvTotalOf(rec){
   const vals = [rec.t, rec.w, rec.e, rec.d, rec.f].map(v=>Number(v)||0);
   return vals.reduce((a,b)=>a+b,0);
 }
-/* Portal-side equivalents of computeAvgTasmee/totalOfMonthly — same fairness
-   rule, just using the payload's short field names (p:present, t:tasmee). */
+/* Portal-side equivalent of computeAvgTasmee — excludes ONLY sessions where
+   the whole group had "no tasmee" toggled on (rec.nt===1). An absence or an
+   individual blank score in a normal session counts as a real zero, same
+   as the admin side. */
 function pvComputeAvgTasmee(records){
-  const vals = (records||[])
-    .filter(r=>r.p!==0 && r.t!=null)
-    .map(r=>Number(r.t));
-  if(vals.length===0) return null;
-  return Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10;
+  const usable = (records||[]).filter(r=>r.nt!==1);
+  if(usable.length===0) return null;
+  const sum = usable.reduce((a,r)=>a + (Number(r.t)||0), 0);
+  return Math.round((sum/usable.length)*10)/10;
 }
 function pvTotalOfMonthly(rec, avgTasmee){
   const missesTasmee = rec.p!==0 && rec.nt===1 && rec.t==null;
