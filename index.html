@@ -717,7 +717,7 @@
         </div>
         <div class="field">
           <label>نوع التقرير</label>
-          <select id="bulkReportType" onchange="toggleBulkSessionRow()">
+          <select id="bulkReportType" onchange="toggleBulkSessionRow(); refreshBulkList()">
             <option value="single">حصة واحدة</option>
             <option value="summary">ملخص جميع الحصص</option>
           </select>
@@ -726,13 +726,13 @@
       <div class="field-row" id="bulkSessionRow">
         <div class="field">
           <label>رقم الحصة</label>
-          <select id="bulkSessionSelect"></select>
+          <select id="bulkSessionSelect" onchange="refreshBulkList()"></select>
         </div>
       </div>
       <div class="field-row" id="bulkMonthRow" style="display:none;">
         <div class="field">
           <label>الشهر</label>
-          <select id="bulkMonthSelect"></select>
+          <select id="bulkMonthSelect" onchange="refreshBulkList()"></select>
         </div>
       </div>
       <button class="btn btn-primary" onclick="prepareBulkMessages()">📋 تجهيز رسائل المجموعة</button>
@@ -1697,9 +1697,39 @@ function deleteSession(){
   if(!confirm(`سيتم حذف كل الدرجات المسجلة في حصة رقم ${session} لهذه المجموعة (${count} سجل). هل أنت متأكد؟`)) return;
   pushUndoSnapshot();
   DATA.grades = DATA.grades.filter(g=>!(g.groupId===groupId && g.session===session));
+  /* Close the gap: every later session of this group moves down by one,
+     together with its per-session settings (max grades, no-tasmee flag). */
+  DATA.grades.forEach(g=>{ if(g.groupId===groupId && g.session>session) g.session = g.session-1; });
+  const shiftKeyed = (obj)=>{
+    if(!obj || typeof obj!=='object') return;
+    const prefix = groupId + '_';
+    const moved = {};
+    Object.keys(obj).forEach(k=>{
+      if(k.indexOf(prefix)!==0) return;
+      const n = Number(k.slice(prefix.length));
+      if(isNaN(n)) return;
+      if(n===session){ delete obj[k]; }
+      else if(n>session){ moved[prefix+(n-1)] = obj[k]; delete obj[k]; }
+    });
+    Object.assign(obj, moved);
+  };
+  shiftKeyed(DATA.sessionMax);
+  shiftKeyed(DATA.sessionNoTasmee);
+  if(DATA.publishLog){
+    Object.keys(DATA.publishLog).forEach(sid=>{
+      const e = DATA.publishLog[sid];
+      if(e && e.groupId===groupId && e.maxSession>=session) e.maxSession = e.maxSession-1;
+    });
+  }
   saveData(true);
-  showToast(`✓ تم حذف حصة رقم ${session}`);
+  showToast(`✓ تم حذف حصة رقم ${session} وإعادة ترتيب الحصص`);
   loadGradeSessions();
+  const sel = document.getElementById('sessionSelect');
+  const avail = Array.from(sel.options).map(o=>Number(o.value));
+  if(avail.length){
+    sel.value = String(avail.includes(session) ? session : avail[avail.length-1]);
+    renderGradesTable();
+  }
 }
 
 /* ---------------- TAB: BEST (LEADERBOARD) ---------------- */
@@ -2994,6 +3024,12 @@ function toggleBulkSessionRow(){
   const isSummary = document.getElementById('bulkReportType').value==='summary';
   document.getElementById('bulkSessionRow').style.display = isSummary ? 'none' : 'flex';
   document.getElementById('bulkMonthRow').style.display = isSummary ? 'flex' : 'none';
+}
+function refreshBulkList(){
+  /* The prepared WhatsApp links embed the report text, so they must be rebuilt
+     whenever the session / month / report type changes. */
+  const box = document.getElementById('bulkList');
+  if(box && box.innerHTML.trim()) prepareBulkMessages();
 }
 function prepareBulkMessages(){
   const groupId = document.getElementById('bulkGroupSelect').value;
