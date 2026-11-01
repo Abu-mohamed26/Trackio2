@@ -681,7 +681,7 @@
         </div>
         <div class="field">
           <label>المجموعة</label>
-          <select id="publishGroupSelect" onchange="getLastSel('publish').groupId=this.value; saveData(true);"></select>
+          <select id="publishGroupSelect" onchange="getLastSel('publish').groupId=this.value; saveData(true); clearPortalViews();"></select>
         </div>
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
@@ -696,6 +696,21 @@
       <div style="font-size:12px; font-weight:700; color:var(--accent-contact); margin-bottom:6px;">بيان النشر</div>
       <div style="font-size:11.5px; color:#8b988f; margin-bottom:10px;">آخر مرة اتنشرت فيها بيانات كل مجموعة على بوابة أولياء الأمور، وهل فيه حصص جديدة لسه ما اتنشرتش.</div>
       <div id="publishStatusWrap"></div>
+
+      <div style="border-top:1px dashed var(--paper-line); margin:16px 0;"></div>
+
+      <div style="font-size:12px; font-weight:700; color:var(--accent-contact); margin-bottom:6px;">متابعة دخول أولياء الأمور <span class="tag">VISITS</span></div>
+      <div style="font-size:11.5px; color:#8b988f; margin-bottom:10px;">بيظهر هنا آخر مرة دخل فيها ولي الأمر البوابة (بالاسم والكود الصح) وعدد مرات الدخول، حسب الصف/المجموعة المختارة فوق. الدخول بيتسجل من وقت تحديث النسخة دي فقط.</div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+        <button class="btn btn-primary btn-sm" id="pvViewsBtn" onclick="loadPortalViews()">🔄 تحديث بيانات الدخول</button>
+        <select id="pvViewsFilter" onchange="renderPortalViews()" style="max-width:220px;">
+          <option value="all">كل الطلاب</option>
+          <option value="never">لم يدخلوا نهائيًا</option>
+          <option value="week">لم يدخلوا آخر 7 أيام</option>
+        </select>
+      </div>
+      <div id="pvViewsStatus" style="font-size:12px; color:#7b887f; margin-bottom:8px;"></div>
+      <div id="pvViewsList"></div>
 
       <div style="border-top:1px dashed var(--paper-line); margin:16px 0;"></div>
 
@@ -3430,6 +3445,109 @@ function renderPublishStatus(){
     <div id="publishStatusDetails" style="display:none; margin-top:8px;">${items.map(x=>x.html).join('')}</div>
   `;
 }
+/* ---- Parent portal visit tracking (teacher side) ---- */
+let pvViewsCache = null; // [{student, count, lastViewAt}]
+function clearPortalViews(){
+  pvViewsCache = null;
+  const l = document.getElementById('pvViewsList'); if(l) l.innerHTML = '';
+  const st = document.getElementById('pvViewsStatus'); if(st) st.textContent = '';
+}
+function pvRelativeTime(ms){
+  const diff = Date.now() - ms;
+  const min = Math.floor(diff/60000);
+  if(min < 1) return 'الآن';
+  if(min < 60) return `منذ ${min} دقيقة`;
+  const hr = Math.floor(min/60);
+  if(hr < 24) return `منذ ${hr} ساعة`;
+  const d = Math.floor(hr/24);
+  return d===1 ? 'امبارح' : `منذ ${d} يوم`;
+}
+async function loadPortalViews(){
+  const btn = document.getElementById('pvViewsBtn');
+  const statusEl = document.getElementById('pvViewsStatus');
+  const stageId = document.getElementById('publishStageSelect').value;
+  const groupId = document.getElementById('publishGroupSelect').value;
+  let targets = DATA.students.filter(s=>s.code);
+  if(groupId) targets = targets.filter(s=>s.groupId===groupId);
+  else if(stageId) targets = targets.filter(s=>s.stageId===stageId);
+  if(targets.length===0){ statusEl.textContent = 'لا يوجد طلاب مطابقين لهذا الاختيار.'; statusEl.style.color = '#7b887f'; return; }
+  btn.disabled = true;
+  statusEl.style.color = '#7b887f';
+  statusEl.textContent = '⏳ جاري التحميل...';
+  const ok = await window.fbReady;
+  if(!ok){
+    statusEl.textContent = '⚠️ تعذر الاتصال بقاعدة البيانات. تأكد من الإنترنت.';
+    statusEl.style.color = 'var(--red)';
+    btn.disabled = false;
+    return;
+  }
+  try{
+    const db = firebase.firestore();
+    const results = [];
+    for(let i=0; i<targets.length; i+=20){
+      const chunk = targets.slice(i, i+20);
+      const docs = await Promise.all(chunk.map(s=>db.collection('views').doc(s.code).get()));
+      docs.forEach((d, idx)=>{
+        const data = d.exists ? d.data() : null;
+        let last = null;
+        if(data && data.lastViewAt){
+          last = typeof data.lastViewAt.toMillis==='function' ? data.lastViewAt.toMillis() : Number(data.lastViewAt) || null;
+        }
+        results.push({ student: chunk[idx], count: data ? (Number(data.count)||0) : 0, lastViewAt: last });
+      });
+    }
+    pvViewsCache = results;
+    statusEl.textContent = '';
+    renderPortalViews();
+  }catch(e){
+    if(e && e.code==='permission-denied'){
+      statusEl.innerHTML = '⚠️ قواعد الحماية (Rules) في Firebase لسه مش مسموح فيها بقراءة/كتابة بيانات الدخول. أضف قاعدة <b>views</b> ثم اضغط Publish وحاول تاني.';
+    } else {
+      statusEl.textContent = `⚠️ حدث خطأ (${(e&&(e.code||e.message))||'غير معروف'}).`;
+    }
+    statusEl.style.color = 'var(--red)';
+  }
+  btn.disabled = false;
+}
+function renderPortalViews(){
+  const box = document.getElementById('pvViewsList');
+  if(!box) return;
+  if(!pvViewsCache){ box.innerHTML = ''; return; }
+  const filter = document.getElementById('pvViewsFilter').value;
+  const weekAgo = Date.now() - 7*24*3600*1000;
+  let rows = pvViewsCache.slice();
+  const visited = rows.filter(r=>r.lastViewAt).length;
+  if(filter==='never') rows = rows.filter(r=>!r.lastViewAt);
+  else if(filter==='week') rows = rows.filter(r=>!r.lastViewAt || r.lastViewAt < weekAgo);
+  rows.sort((a,b)=>{
+    if(!a.lastViewAt && !b.lastViewAt) return a.student.name.localeCompare(b.student.name, 'ar');
+    if(!a.lastViewAt) return -1;
+    if(!b.lastViewAt) return 1;
+    return a.lastViewAt - b.lastViewAt;
+  });
+  const summary = `<div style="font-size:12.5px; font-weight:600; margin-bottom:6px;">دخل ${visited} من ${pvViewsCache.length} طالب</div>`;
+  if(rows.length===0){
+    box.innerHTML = summary + `<div class="empty-state">لا يوجد طلاب في هذا الفلتر.</div>`;
+    return;
+  }
+  box.innerHTML = summary + rows.map(r=>{
+    const s = r.student;
+    const notPublished = !(DATA.publishLog && DATA.publishLog[s.id]);
+    let status;
+    if(r.lastViewAt){
+      const when = new Date(r.lastViewAt).toLocaleString('ar-EG', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+      status = `<span class="pill pill-present">${pvRelativeTime(r.lastViewAt)}</span>`;
+      var detail = `${when} · ${r.count} مرة`;
+    } else {
+      status = `<span class="pill pill-absent">لم يدخل بعد</span>`;
+      var detail = notPublished ? 'لم يتم نشر بياناته بعد' : '';
+    }
+    return `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid var(--paper-line); font-size:12.5px;">
+      <span><b>${s.name}</b><span style="color:#8b988f;"> — ${groupName(s.groupId)}${detail?' · '+detail:''}</span></span>
+      ${status}
+    </div>`;
+  }).join('');
+}
 function togglePublishStatusDetails(){
   const details = document.getElementById('publishStatusDetails');
   const btn = document.getElementById('publishStatusToggleBtn');
@@ -3438,6 +3556,7 @@ function togglePublishStatusDetails(){
   btn.textContent = open ? 'عرض التفاصيل ▾' : 'إخفاء التفاصيل ▴';
 }
 function fillPublishGroups(){
+  if(typeof clearPortalViews==='function') clearPortalViews();
   const stageId = document.getElementById('publishStageSelect').value;
   getLastSel('publish').stageId = stageId;
   const sel = document.getElementById('publishGroupSelect');
@@ -3707,6 +3826,22 @@ function renderPortalView(){
     <div id="portalResult"></div>
   `;
 }
+/* Records that a parent opened the report (students/{code} lookup succeeded).
+   Fire-and-forget: a failure here must never affect what the parent sees.
+   Repeated lookups from the same browser within 30 minutes count once. */
+function logPortalVisit(code){
+  try{
+    const key = 'pv_last_' + code;
+    const last = Number(sessionStorage.getItem(key) || localStorage.getItem(key) || 0);
+    if(Date.now() - last < 30*60*1000) return;
+    try{ localStorage.setItem(key, String(Date.now())); }catch(e){}
+    const FV = firebase.firestore.FieldValue;
+    firebase.firestore().collection('views').doc(code).set({
+      count: FV.increment(1),
+      lastViewAt: FV.serverTimestamp()
+    }, { merge: true }).catch(()=>{});
+  }catch(e){}
+}
 async function portalLookup(){
   const name = document.getElementById('portalNameInput').value.trim();
   const code = document.getElementById('portalCodeInput').value.trim().toUpperCase();
@@ -3735,6 +3870,7 @@ async function portalLookup(){
     }
     resultBox.innerHTML = '';
     renderParentReport(data, 'portalResult');
+    logPortalVisit(code);
   }catch(e){
     resultBox.innerHTML = `<div class="pv-empty">حدث خطأ أثناء البحث (${e.code||e.message||'غير معروف'}). حاول مرة أخرى.</div>`;
   }
