@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&family=Playfair+Display:ital,wght@0,700;1,400;1,700&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&family=Playfair+Display:ital,wght@0,700;1,400;1,700&family=Dancing+Script:wght@600;700&family=Cormorant+Garamond:ital,wght@1,700&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --ink:#22303A;
@@ -2752,17 +2752,199 @@ function drawCertBorder(ctx, W, H){
   ctx.strokeStyle = '#1B2A6B'; ctx.lineWidth = 1.2;
   ctx.strokeRect(margin+26, margin+26, W-2*(margin+26), H-2*(margin+26));
 }
+function hexA(hex, a){
+  const h = hex.replace('#','');
+  const n = parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h, 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+/* 3D mortarboard: skull-cap body, board with visible thickness, gold piping,
+   gloss, button and a hanging tassel. `size` is roughly the board's width. */
 function drawCertGradCap(ctx, cx, cy, size){
+  const s = size;
   ctx.save();
-  ctx.fillStyle = '#1B2A6B';
+  // soft ground shadow
+  ctx.fillStyle = 'rgba(15,23,42,0.20)';
+  ctx.beginPath(); ctx.ellipse(cx+s*0.03, cy+s*0.50, s*0.40, s*0.065, 0, 0, Math.PI*2); ctx.fill();
+
+  // skull-cap body (under the board)
+  const bg = ctx.createLinearGradient(cx-s*0.28, 0, cx+s*0.28, 0);
+  bg.addColorStop(0, '#0A1038'); bg.addColorStop(0.35, '#2B3C9E'); bg.addColorStop(0.65, '#1B2A6B'); bg.addColorStop(1, '#070B2B');
+  ctx.fillStyle = bg;
   ctx.beginPath();
-  ctx.moveTo(cx, cy-size*0.35); ctx.lineTo(cx+size*0.55, cy); ctx.lineTo(cx, cy+size*0.35); ctx.lineTo(cx-size*0.55, cy);
+  ctx.moveTo(cx-s*0.27, cy+s*0.04);
+  ctx.lineTo(cx-s*0.27, cy+s*0.31);
+  ctx.quadraticCurveTo(cx, cy+s*0.54, cx+s*0.27, cy+s*0.31);
+  ctx.lineTo(cx+s*0.27, cy+s*0.04);
   ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#F5C518';
-  ctx.beginPath(); ctx.arc(cx, cy-size*0.35, size*0.07, 0, Math.PI*2); ctx.fill();
-  ctx.strokeStyle = '#F5C518'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(cx, cy-size*0.35); ctx.lineTo(cx+size*0.42, cy+size*0.2); ctx.stroke();
-  ctx.beginPath(); ctx.arc(cx+size*0.42, cy+size*0.24, size*0.045, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = s*0.012;
+  ctx.beginPath();
+  ctx.moveTo(cx-s*0.22, cy+s*0.30);
+  ctx.quadraticCurveTo(cx, cy+s*0.47, cx+s*0.22, cy+s*0.30);
+  ctx.stroke();
+  // gold band around the base of the skull-cap
+  ctx.strokeStyle = '#E0B422'; ctx.lineWidth = s*0.022;
+  ctx.beginPath();
+  ctx.moveTo(cx-s*0.27, cy+s*0.31);
+  ctx.quadraticCurveTo(cx, cy+s*0.54, cx+s*0.27, cy+s*0.31);
+  ctx.stroke();
+
+  // board (rhombus top face + thickness)
+  const t = s*0.075;
+  const T = [cx, cy-s*0.25], R = [cx+s*0.53, cy], B = [cx, cy+s*0.25], L = [cx-s*0.53, cy];
+  ctx.fillStyle = '#0C1348';
+  ctx.beginPath(); ctx.moveTo(L[0],L[1]); ctx.lineTo(B[0],B[1]); ctx.lineTo(B[0],B[1]+t); ctx.lineTo(L[0],L[1]+t); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#060A2C';
+  ctx.beginPath(); ctx.moveTo(B[0],B[1]); ctx.lineTo(R[0],R[1]); ctx.lineTo(R[0],R[1]+t); ctx.lineTo(B[0],B[1]+t); ctx.closePath(); ctx.fill();
+  const tg = ctx.createLinearGradient(L[0], T[1], R[0], B[1]);
+  tg.addColorStop(0, '#5568E0'); tg.addColorStop(0.5, '#2A3CA6'); tg.addColorStop(1, '#141E68');
+  ctx.fillStyle = tg;
+  ctx.beginPath(); ctx.moveTo(T[0],T[1]); ctx.lineTo(R[0],R[1]); ctx.lineTo(B[0],B[1]); ctx.lineTo(L[0],L[1]); ctx.closePath(); ctx.fill();
+  // gloss
+  ctx.fillStyle = 'rgba(255,255,255,0.13)';
+  ctx.beginPath(); ctx.moveTo(T[0],T[1]); ctx.lineTo(R[0],R[1]); ctx.lineTo(cx+s*0.08, cy+s*0.02); ctx.lineTo(cx-s*0.20, cy-s*0.12); ctx.closePath(); ctx.fill();
+  // gold piping on the two near edges + light rim on the far edges
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#F5C518'; ctx.lineWidth = s*0.022;
+  ctx.beginPath(); ctx.moveTo(L[0],L[1]); ctx.lineTo(B[0],B[1]); ctx.lineTo(R[0],R[1]); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.40)'; ctx.lineWidth = s*0.012;
+  ctx.beginPath(); ctx.moveTo(L[0],L[1]); ctx.lineTo(T[0],T[1]); ctx.lineTo(R[0],R[1]); ctx.stroke();
+
+  // button
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(cx+s*0.012, cy+s*0.022, s*0.055, s*0.03, 0, 0, Math.PI*2); ctx.fill();
+  const bgr = ctx.createRadialGradient(cx-s*0.015, cy-s*0.02, s*0.004, cx, cy, s*0.055);
+  bgr.addColorStop(0, '#FFF3B0'); bgr.addColorStop(0.5, '#F5C518'); bgr.addColorStop(1, '#B8860B');
+  ctx.fillStyle = bgr;
+  ctx.beginPath(); ctx.arc(cx, cy-s*0.005, s*0.05, 0, Math.PI*2); ctx.fill();
+
+  // tassel: cord over the board, then hanging past the right edge
+  const hx = cx+s*0.44, hy = cy+s*0.06;
+  ctx.strokeStyle = '#F5C518'; ctx.lineWidth = s*0.02; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx, cy-s*0.005); ctx.quadraticCurveTo(cx+s*0.24, cy-s*0.04, hx, hy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(hx, hy); ctx.quadraticCurveTo(hx+s*0.05, hy+s*0.13, hx+s*0.035, hy+s*0.25); ctx.stroke();
+  const ex = hx+s*0.035, ey = hy+s*0.25;
+  const hg = ctx.createLinearGradient(ex-s*0.03, 0, ex+s*0.03, 0);
+  hg.addColorStop(0, '#B8860B'); hg.addColorStop(0.5, '#FFE27A'); hg.addColorStop(1, '#B8860B');
+  ctx.fillStyle = hg;
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(ex-s*0.03, ey-s*0.005, s*0.06, s*0.05, s*0.015) : ctx.rect(ex-s*0.03, ey-s*0.005, s*0.06, s*0.05); ctx.fill();
+  ctx.strokeStyle = '#F5C518'; ctx.lineWidth = s*0.011;
+  for(let i=-3;i<=3;i++){
+    ctx.beginPath(); ctx.moveTo(ex+i*s*0.0085, ey+s*0.045); ctx.lineTo(ex+i*s*0.014, ey+s*0.135); ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawSparkle(ctx, cx, cy, r, color){
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy-r);
+  ctx.quadraticCurveTo(cx, cy, cx+r, cy);
+  ctx.quadraticCurveTo(cx, cy, cx, cy+r);
+  ctx.quadraticCurveTo(cx, cy, cx-r, cy);
+  ctx.quadraticCurveTo(cx, cy, cx, cy-r);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+/* Raised (embossed) text: soft shadow, stacked extrusion layers, dark outline,
+   metallic gradient face and a thin top highlight. Shrinks the font until the
+   line fits maxW, so it works with any font / text length. */
+function drawEmbossedText(ctx, text, x, y, family, startSize, minSize, maxW, o){
+  o = o || {};
+  const weight = o.weight || '700';
+  let size = startSize;
+  ctx.save();
+  ctx.direction = o.rtl ? 'rtl' : 'ltr';
+  ctx.textAlign = 'center';
+  ctx.lineJoin = 'round';
+  const setFont = ()=>{ ctx.font = `${weight} ${size}px ${family}`; };
+  setFont();
+  while(ctx.measureText(text).width > maxW && size > minSize){ size -= 1; setFont(); }
+  const depth = o.depth || Math.max(3, Math.round(size*0.11));
+  const side = o.side || '#1B2A6B';
+  // soft cast shadow under the extrusion
+  ctx.shadowColor = 'rgba(27,42,107,0.38)'; ctx.shadowBlur = 9; ctx.shadowOffsetY = depth+3; ctx.shadowOffsetX = 2;
+  ctx.fillStyle = side;
+  ctx.fillText(text, x+depth*0.5, y+depth);
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; ctx.shadowOffsetX = 0;
+  for(let i=depth-1;i>=1;i--){ ctx.fillText(text, x+i*0.5, y+i); }
+  // outline + metallic face
+  ctx.strokeStyle = o.outline || '#12205A'; ctx.lineWidth = o.outlineW || Math.max(2.5, size*0.085);
+  ctx.strokeText(text, x, y);
+  const g = ctx.createLinearGradient(0, y-size*0.85, 0, y+size*0.3);
+  const stops = o.face || ['#FFF6BF','#F7CE3A','#D9A21B','#A8740A'];
+  stops.forEach((c,i)=>g.addColorStop(i/(stops.length-1), c));
+  ctx.fillStyle = g;
+  ctx.fillText(text, x, y);
+  // top-left highlight
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1.1;
+  ctx.strokeText(text, x-0.7, y-0.9);
+  ctx.restore();
+  return size;
+}
+function drawOrnamentDivider(ctx, cx, y, halfLen){
+  ctx.save();
+  [-1,1].forEach(dir=>{
+    const x0 = cx+dir*46, x1 = cx+dir*halfLen;
+    const lg = ctx.createLinearGradient(x0,0,x1,0);
+    lg.addColorStop(0,'rgba(201,162,39,1)'); lg.addColorStop(1,'rgba(201,162,39,0)');
+    ctx.strokeStyle = lg; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+    // little scroll curl next to the centre
+    ctx.strokeStyle = '#C9A227'; ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(cx+dir*46, y);
+    ctx.bezierCurveTo(cx+dir*60, y-12, cx+dir*82, y+12, cx+dir*100, y);
+    ctx.stroke();
+    ctx.fillStyle = '#C9A227';
+    ctx.beginPath(); ctx.arc(cx+dir*108, y, 2.6, 0, Math.PI*2); ctx.fill();
+    // diamond bead
+    ctx.beginPath();
+    ctx.moveTo(cx+dir*126, y-5); ctx.lineTo(cx+dir*132, y); ctx.lineTo(cx+dir*126, y+5); ctx.lineTo(cx+dir*120, y);
+    ctx.closePath(); ctx.fill();
+  });
+  drawMiniStar(ctx, cx, y, 12, '#F0B90B');
+  drawMiniStar(ctx, cx-27, y+1, 5, '#E0C060');
+  drawMiniStar(ctx, cx+27, y+1, 5, '#E0C060');
+  ctx.restore();
+}
+function drawFirework(ctx, cx, cy, r, colors, seed){
+  let sd = seed || 7;
+  const rnd = ()=>{ sd = (sd*9301+49297)%233280; return sd/233280; };
+  ctx.save();
+  ctx.lineCap = 'round';
+  const glow = ctx.createRadialGradient(cx,cy,0,cx,cy,r*0.55);
+  glow.addColorStop(0, 'rgba(255,236,160,0.55)'); glow.addColorStop(1, 'rgba(255,236,160,0)');
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx,cy,r*0.55,0,Math.PI*2); ctx.fill();
+  const n = 20;
+  for(let i=0;i<n;i++){
+    const ang = (i/n)*Math.PI*2 + rnd()*0.06;
+    const len = r*(i%2===0 ? 1 : 0.78);
+    const c = colors[i%colors.length];
+    const x0 = cx+Math.cos(ang)*r*0.16, y0 = cy+Math.sin(ang)*r*0.16;
+    const x1 = cx+Math.cos(ang)*len,   y1 = cy+Math.sin(ang)*len;
+    const lg = ctx.createLinearGradient(x0,y0,x1,y1);
+    lg.addColorStop(0, hexA(c,0)); lg.addColorStop(0.55, hexA(c,0.55)); lg.addColorStop(1, hexA(c,1));
+    ctx.strokeStyle = lg; ctx.lineWidth = Math.max(2, r*0.045);
+    ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+    if(i%2===0) drawMiniStar(ctx, x1, y1, Math.max(4,r*0.07), c);
+    else { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x1,y1,Math.max(2.5,r*0.032),0,Math.PI*2); ctx.fill(); }
+  }
+  // inner ring of short sparks
+  for(let i=0;i<n;i++){
+    const ang = ((i+0.5)/n)*Math.PI*2;
+    const c = colors[(i+1)%colors.length];
+    ctx.strokeStyle = hexA(c,0.85); ctx.lineWidth = Math.max(1.5, r*0.03);
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(ang)*r*0.28, cy+Math.sin(ang)*r*0.28);
+    ctx.lineTo(cx+Math.cos(ang)*r*0.44, cy+Math.sin(ang)*r*0.44);
+    ctx.stroke();
+  }
+  // drifting embers just beyond the burst
+  for(let i=0;i<10;i++){
+    const ang = rnd()*Math.PI*2, d = r*(1.05+rnd()*0.22);
+    ctx.fillStyle = hexA(colors[i%colors.length], 0.7);
+    ctx.beginPath(); ctx.arc(cx+Math.cos(ang)*d, cy+Math.sin(ang)*d, 1.8+rnd()*2, 0, Math.PI*2); ctx.fill();
+  }
   ctx.restore();
 }
 function drawCertStar(ctx, cx, cy, r, innerColor){
@@ -2892,63 +3074,99 @@ function generateCertificateDataURL(studentName, stageLabel, yearLabel, teacherN
   grad.addColorStop(0,'#FFFDF3'); grad.addColorStop(0.6,'#FBF3DC'); grad.addColorStop(1,'#F3E4B8');
   ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
 
+  // fireworks (behind everything else) — kept to the side zones, clear of the text
+  const fwA = ['#F0B90B','#E1673B','#E04C9A','#3E8FE0'];
+  const fwB = ['#3E8FE0','#5B54C9','#F0B90B','#4CAF7A'];
+  drawFirework(ctx, 150, 450, 92, fwA, 11);
+  drawFirework(ctx, 215, 335, 40, fwA, 31);
+  drawFirework(ctx, W-175, 318, 60, fwA, 17);
+
+  // scattered sparkles and stars
+  [[95,310,14,'#F0B90B'],[W-100,262,12,'#F0B90B'],[60,595,10,'#E1673B'],[W-62,650,10,'#3E8FE0'],
+   [215,580,9,'#C9A227'],[W-250,500,8,'#C9A227'],[110,375,8,'#5B54C9'],[W-100,285,9,'#E04C9A'],
+   [95,785,12,'#F0B90B'],[W-96,790,12,'#F0B90B'],[62,262,8,'#C9A227'],[W-62,232,8,'#C9A227']
+  ].forEach(([x,y,r,c])=>drawSparkle(ctx,x,y,r,c));
+  [[70,480,8,'#F0B90B'],[W-72,445,8,'#F0B90B'],[105,690,7,'#E04C9A'],[W-175,705,7,'#3E8FE0']].forEach(([x,y,r,c])=>drawMiniStar(ctx,x,y,r,c));
+
   drawCertBorder(ctx, W, H);
   ctx.textAlign = 'center';
 
-  ctx.fillStyle = '#5B54C9';
-  ctx.font = 'italic 700 34px Georgia, serif';
-  const taglineText = 'Hard to be the best , Hardest to keep it.';
-  ctx.fillText(taglineText, W/2, 118);
+  // motivational quote at the top (one line English + one line Arabic), embossed
+  drawEmbossedText(ctx, 'Success is the result of preparation, hard work, and learning from failure. Keep shining!',
+    W/2, 116, '"Cormorant Garamond", "Playfair Display", Georgia, serif', 46, 16, 1020,
+    { weight:'italic 700', depth:3, outlineW:2.4, outline:'#C9A227', side:'#1B2A6B',
+      face:['#8178F2','#5B54C9','#3A33A0'] });
+  drawEmbossedText(ctx, 'النجاح هو ثمرة الاستعداد، والعمل الجاد، والتعلم من الفشل. استمر في التألق!',
+    W/2, 186, '"Amiri", "Tajawal", serif', 46, 16, 880,
+    { rtl:true, depth:3, outlineW:2.4, outline:'#C9A227', side:'#1B2A6B',
+      face:['#4A63CF','#1B2A6B','#0F1A50'] });
 
   ctx.fillStyle = '#1B2A6B';
   ctx.font = '700 66px Georgia, serif';
   const titleText = 'Certificate of Excellence';
-  ctx.fillText(titleText, W/2, 210);
+  ctx.fillText(titleText, W/2, 312);
 
-  // celebratory balloons (top-left) and victory-jump figure (top-right), well clear of the title text
-  drawBalloons(ctx, 145, 150, 0.9);
-  drawSuccessJump(ctx, W-145, 165, 110);
+  // celebratory balloons (top-left) and victory-jump figure (top-right)
+  drawBalloons(ctx, 145, 178, 0.9);
+  drawSuccessJump(ctx, W-145, 205, 110);
 
   ctx.fillStyle = '#111827';
   ctx.font = 'italic 600 25px Georgia, serif';
   const givenText = 'This certificate has been honorably given to :';
-  ctx.fillText(givenText, W/2, 268);
+  ctx.fillText(givenText, W/2, 366);
   const gw = ctx.measureText(givenText).width;
   ctx.strokeStyle = '#111827'; ctx.lineWidth = 1.4;
-  ctx.beginPath(); ctx.moveTo(W/2-gw/2, 278); ctx.lineTo(W/2+gw/2, 278); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W/2-gw/2, 376); ctx.lineTo(W/2+gw/2, 376); ctx.stroke();
 
-  // soft gold ribbon highlight behind the student's name
-  ctx.font = '700 76px "Tajawal", Georgia, serif';
+  // student's name: shrink only if it would collide with the cap / sides
+  let nameSize = 76;
+  ctx.font = `700 ${nameSize}px "Tajawal", Georgia, serif`;
+  while(ctx.measureText(studentName).width > 680 && nameSize > 40){
+    nameSize -= 2; ctx.font = `700 ${nameSize}px "Tajawal", Georgia, serif`;
+  }
   const nameWidth = ctx.measureText(studentName).width;
+  const nameY = 466;
   const ribbonGrad = ctx.createLinearGradient(W/2-nameWidth/2-40, 0, W/2+nameWidth/2+40, 0);
   ribbonGrad.addColorStop(0, 'rgba(201,162,39,0)');
   ribbonGrad.addColorStop(0.5, 'rgba(201,162,39,0.22)');
   ribbonGrad.addColorStop(1, 'rgba(201,162,39,0)');
   ctx.fillStyle = ribbonGrad;
-  ctx.fillRect(W/2-nameWidth/2-50, 348, nameWidth+100, 78);
-
+  ctx.fillRect(W/2-nameWidth/2-50, nameY-57, nameWidth+100, 78);
   ctx.fillStyle = '#3E8FE0';
-  ctx.fillText(studentName, W/2, 405);
-  drawCertGradCap(ctx, W/2 + nameWidth/2 + 80, 365, 60);
+  ctx.fillText(studentName, W/2, nameY);
+
+  // big 3D graduation cap beside the name, with stars around it
+  const capSize = 150;
+  const capX = Math.min(W/2 + nameWidth/2 + 125, W-190);
+  const capY = 432;
+  drawSparkle(ctx, capX-capSize*0.62, capY-capSize*0.3, 12, '#F0B90B');
+  drawSparkle(ctx, capX+capSize*0.62, capY-capSize*0.38, 16, '#F0B90B');
+  drawMiniStar(ctx, capX+capSize*0.1, capY-capSize*0.5, 9, '#E8B90E');
+  drawCertGradCap(ctx, capX, capY, capSize);
 
   ctx.fillStyle = '#111827';
-  ctx.font = '600 24px Georgia, serif';
-  ctx.fillText('For outstanding excellence in English, wishing continued success', W/2, 470);
-  ctx.fillText('and a brilliant future', W/2, 500);
+  ctx.font = '700 34px Georgia, serif';
+  ctx.fillText('For outstanding excellence in English, wishing continued success', W/2, 556);
+  ctx.fillText('and a brilliant future', W/2, 600);
 
-  ctx.font = '700 27px "Tajawal", Georgia, serif';
-  ctx.fillText(`[ ${stageLabel} . ${yearLabel} ]`, W/2, 550);
+  ctx.font = '700 28px "Tajawal", Georgia, serif';
+  ctx.fillText(`[ ${stageLabel} . ${yearLabel} ]`, W/2, 656);
 
-  // laurel branches framing the lower portion (safe zone, clear of text)
+  // ornamental divider
+  ctx.strokeStyle = '#C9A227'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(W*0.34, 698); ctx.lineTo(W/2-34, 698); ctx.moveTo(W/2+34, 698); ctx.lineTo(W*0.66, 698); ctx.stroke();
+  drawMiniStar(ctx, W/2, 698, 12, '#F0B90B');
+
+  // laurel branches framing the lower portion
   drawLaurelBranch(ctx, W*0.14, 650, false);
   drawLaurelBranch(ctx, W*0.86, 650, true);
 
   ctx.strokeStyle = '#9CA3AF'; ctx.lineWidth = 1.4;
-  ctx.beginPath(); ctx.moveTo(W*0.25, 600); ctx.lineTo(W*0.75, 600); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W*0.36, 766); ctx.lineTo(W*0.64, 766); ctx.stroke();
 
   ctx.fillStyle = '#374151';
   ctx.font = 'italic 700 38px Georgia, serif';
-  ctx.fillText(teacherName, W/2, 655);
+  ctx.fillText(teacherName, W/2, 815);
 
   // trophy (bottom-left) mirrors the excellence seal star (bottom-right)
   drawTrophy(ctx, 215, H-185, 140);
@@ -2956,10 +3174,25 @@ function generateCertificateDataURL(studentName, stageLabel, yearLabel, teacherN
 
   return canvas.toDataURL('image/png');
 }
-function downloadCertificate(studentId, groupId){
+async function ensureCertFonts(studentName){
+  try{
+    if(!document.fonts || !document.fonts.load) return;
+    await Promise.race([
+      Promise.all([
+        document.fonts.load('italic 700 40px "Cormorant Garamond"', 'Success is the result'),
+        document.fonts.load('700 40px "Amiri"', 'النجاح هو ثمرة الاستعداد'),
+        document.fonts.load('700 40px "Tajawal"', (studentName||'') + 'الأول الثانوي المعلم'),
+        document.fonts.load('700 40px "Playfair Display"', 'Success')
+      ]),
+      new Promise(res=>setTimeout(res, 3500))
+    ]);
+  }catch(e){}
+}
+async function downloadCertificate(studentId, groupId){
   const student = DATA.students.find(s=>s.id===studentId);
   if(!student) return;
   const teacherName = (DATA.teacherName && DATA.teacherName.trim()) ? DATA.teacherName.trim() : 'المعلم';
+  await ensureCertFonts(student.name + ' ' + teacherName);
   const dataUrl = generateCertificateDataURL(student.name, stageName(student.stageId), DATA.academicYear || defaultAcademicYear(), teacherName);
   const a = document.createElement('a');
   a.href = dataUrl;
