@@ -646,6 +646,22 @@
     </div>
 
     <div class="card">
+      <h2>شهادة استثنائية <span class="tag">SPECIAL</span></h2>
+      <div style="font-size:12.5px; color:#8b988f; margin-bottom:10px;">لطالب خارج الترتيب: اكتب اسمه واختر صفه، وهتتحمّل شهادة تقدير بنفس التصميم، وعلى الكأس نجمة بدل رقم الترتيب.</div>
+      <div class="field-row">
+        <div class="field">
+          <label>اسم الطالب</label>
+          <input type="text" id="specialCertName" placeholder="اكتب اسم الطالب">
+        </div>
+        <div class="field">
+          <label>الصف الدراسي</label>
+          <select id="specialCertStage"></select>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="downloadSpecialCertificate()">🏆 تحميل الشهادة الاستثنائية</button>
+    </div>
+
+    <div class="card">
       <h2>بطل التحدي والتقدم <span class="tag">MOST IMPROVED</span></h2>
       <div class="field-row">
         <div class="field">
@@ -1754,6 +1770,13 @@ function renderBestTab(){
   stageSel.value = pickRememberedStage('best');
   fillBestGroups();
 
+  const specialStageSel = document.getElementById('specialCertStage');
+  if(specialStageSel){
+    const keep = specialStageSel.value;
+    fillStageOptions(specialStageSel, false);
+    specialStageSel.value = keep || stageSel.value;
+  }
+
   const progStageSel = document.getElementById('progStageSelect');
   fillStageOptions(progStageSel, false);
   progStageSel.value = pickRememberedStage('prog');
@@ -1871,7 +1894,7 @@ function renderLeaderboard(){
         <div class="meta">${r.sessionsRecorded} من ${blockSize} حصص · بدون غياب · المستوى: ${avgLevel.label}</div>
       </div>
       <div class="rank-score">${r.total} / ${blockSize*70}</div>
-      ${certEligible ? `<button class="btn btn-outline btn-sm" style="margin-right:8px;" onclick="downloadCertificate('${r.student.id}','${groupId}')">🏆 شهادة</button>` : ''}
+      ${certEligible ? `<button class="btn btn-outline btn-sm" style="margin-right:8px;" onclick="downloadCertificate('${r.student.id}','${groupId}',${r.rank})">🏆 شهادة</button>` : ''}
     </div>`;
   }).join('');
 
@@ -3028,7 +3051,7 @@ function drawBalloons(ctx, cx, cy, scale){
   });
   ctx.restore();
 }
-function drawTrophy(ctx, cx, cy, size){
+function drawTrophy(ctx, cx, cy, size, mark){
   ctx.save();
   ctx.translate(cx,cy);
   ctx.fillStyle = '#F0B90B';
@@ -3047,6 +3070,18 @@ function drawTrophy(ctx, cx, cy, size){
   ctx.closePath(); ctx.fill(); ctx.stroke();
   ctx.strokeStyle='#FFE9A8'; ctx.lineWidth=size*0.02;
   ctx.beginPath(); ctx.moveTo(-size*0.3,-size*0.38); ctx.lineTo(size*0.3,-size*0.38); ctx.stroke();
+  // rank number (1/2/3) — or a star for a special certificate — engraved on the cup
+  if(mark==='star'){
+    drawMiniStar(ctx, size*0.012, -size*0.2+size*0.012, size*0.17, 'rgba(255,255,255,0.7)');
+    drawMiniStar(ctx, 0, -size*0.2, size*0.17, '#1B2A6B');
+  } else if(mark){
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `700 ${Math.round(size*0.44)}px Georgia, serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillText(String(mark), size*0.012, -size*0.19+size*0.015);
+    ctx.fillStyle = '#1B2A6B';
+    ctx.fillText(String(mark), 0, -size*0.19);
+  }
   ctx.restore();
 }
 function drawSuccessJump(ctx, cx, cy, size){
@@ -3064,7 +3099,7 @@ function drawSuccessJump(ctx, cx, cy, size){
   drawMiniStar(ctx, size*0.2, size*0.4, size*0.055, '#C9A227');
   ctx.restore();
 }
-function generateCertificateDataURL(studentName, stageLabel, yearLabel, teacherName){
+function generateCertificateDataURL(studentName, stageLabel, yearLabel, teacherName, trophyMark){
   const W=1320, H=930;
   const canvas = document.createElement('canvas');
   canvas.width=W; canvas.height=H;
@@ -3169,7 +3204,7 @@ function generateCertificateDataURL(studentName, stageLabel, yearLabel, teacherN
   ctx.fillText(teacherName, W/2, 815);
 
   // trophy (bottom-left) mirrors the excellence seal star (bottom-right)
-  drawTrophy(ctx, 215, H-185, 140);
+  drawTrophy(ctx, 215, H-190, 165, trophyMark);
   drawCertStar(ctx, W-215, H-185, 92);
 
   return canvas.toDataURL('image/png');
@@ -3188,17 +3223,51 @@ async function ensureCertFonts(studentName){
     ]);
   }catch(e){}
 }
-async function downloadCertificate(studentId, groupId){
-  const student = DATA.students.find(s=>s.id===studentId);
-  if(!student) return;
-  const teacherName = (DATA.teacherName && DATA.teacherName.trim()) ? DATA.teacherName.trim() : 'المعلم';
-  await ensureCertFonts(student.name + ' ' + teacherName);
-  const dataUrl = generateCertificateDataURL(student.name, stageName(student.stageId), DATA.academicYear || defaultAcademicYear(), teacherName);
+/* Same ranking rule as the leaderboard tab: no absences, level "ممتاز", ties share a rank. */
+function getDenseRank(studentId, groupId, block){
+  const rows = studentsByGroup(groupId).map(s=>{
+    const records = DATA.grades.filter(g=>g.groupId===groupId && g.studentId===s.id && g.session>=block.start && g.session<=block.end);
+    const avgT = computeAvgTasmee(records);
+    const total = records.reduce((a,r)=>a+totalOfMonthly(r,avgT),0);
+    const absences = records.filter(r=>r.attendance==='غائب').length;
+    return { studentId: s.id, total, absences, sessionsRecorded: records.length };
+  }).filter(r=>r.absences===0 && r.sessionsRecorded>0 && levelOf(r.total/block.blockSize).label==='ممتاز')
+    .sort((a,b)=>b.total-a.total);
+  const me = assignRanks(rows, r=>r.total).find(r=>r.studentId===studentId);
+  return me ? me.rank : null;
+}
+function certTeacherName(){
+  return (DATA.teacherName && DATA.teacherName.trim()) ? DATA.teacherName.trim() : 'المعلم';
+}
+function saveCertificateImage(dataUrl, fileName){
   const a = document.createElement('a');
   a.href = dataUrl;
-  a.download = `شهادة_تقدير_${student.name}.png`;
+  a.download = fileName;
   a.click();
   showToast('✓ تم تحميل الشهادة — أرفقها يدويًا مع رسالة واتساب');
+}
+async function downloadCertificate(studentId, groupId, rank, month){
+  const student = DATA.students.find(s=>s.id===studentId);
+  if(!student) return;
+  const teacherName = certTeacherName();
+  let mark = Number(rank) || null;
+  if(!mark){
+    const st = getCertificateStatus(studentId, groupId, month ? Number(month) : undefined);
+    if(st) mark = getDenseRank(studentId, groupId, st.block) || st.rank;
+  }
+  if(mark && mark>3) mark = null;
+  await ensureCertFonts(student.name + ' ' + teacherName);
+  const dataUrl = generateCertificateDataURL(student.name, stageName(student.stageId), DATA.academicYear || defaultAcademicYear(), teacherName, mark);
+  saveCertificateImage(dataUrl, `شهادة_تقدير_${student.name}.png`);
+}
+async function downloadSpecialCertificate(){
+  const name = document.getElementById('specialCertName').value.trim();
+  const stageId = document.getElementById('specialCertStage').value;
+  if(!name){ alert('اكتب اسم الطالب أولًا'); return; }
+  const teacherName = certTeacherName();
+  await ensureCertFonts(name + ' ' + teacherName);
+  const dataUrl = generateCertificateDataURL(name, stageName(stageId), DATA.academicYear || defaultAcademicYear(), teacherName, 'star');
+  saveCertificateImage(dataUrl, `شهادة_تقدير_استثنائية_${name}.png`);
 }
 function renderCertificateOffer(student, groupId){
   const box = document.getElementById('certOfferBox');
@@ -3212,7 +3281,7 @@ function renderCertificateOffer(student, groupId){
         <div style="font-weight:700; color:var(--chalk-green-dark);">🏆 ${student.name} حصل على المركز ${status.rank===1?'الأول':'الثاني'} بتقدير ممتاز في الشهر ${status.block.blockIndex}!</div>
         <div style="font-size:12.5px; color:#7b887f; margin-top:4px;">حمّل شهادة التقدير وأرفقها يدويًا مع رسالة الواتساب لولي الأمر.</div>
       </div>
-      <button class="btn btn-primary btn-sm" onclick="downloadCertificate('${student.id}','${groupId}')">🏆 تحميل الشهادة</button>
+      <button class="btn btn-primary btn-sm" onclick="downloadCertificate('${student.id}','${groupId}',0,${status.block.blockIndex})">🏆 تحميل الشهادة</button>
     </div>
   </div>`;
 }
@@ -3300,7 +3369,7 @@ function prepareBulkMessages(){
       return `<div class="student-card">
         <div class="student-info"><b>${s.name}</b><div class="meta">${hasPhone ? 'هاتف ولي الأمر: '+s.parentPhone : 'لا يوجد رقم هاتف مسجل'}${certStatus ? ' · 🏆 مؤهل لشهادة تقدير' : ''}</div></div>
         <div class="student-actions">
-          ${certStatus ? `<button class="btn btn-outline btn-sm" onclick="downloadCertificate('${s.id}','${groupId}')">🏆 شهادة</button>` : ''}
+          ${certStatus ? `<button class="btn btn-outline btn-sm" onclick="downloadCertificate('${s.id}','${groupId}',0,${certStatus.block.blockIndex})">🏆 شهادة</button>` : ''}
           ${hasPhone
             ? `<a class="btn btn-wa btn-sm" href="https://wa.me/${normalizePhone(s.parentPhone)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">📲 إرسال</a>`
             : `<span class="btn btn-outline btn-sm" style="opacity:.5; cursor:not-allowed;">لا يوجد رقم</span>`}
